@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ffxiv-rag-assistant
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ffxiv-rag-assistant
+  template:
+    metadata:
+      labels:
+        app: ffxiv-rag-assistant
+    spec:
+      containers:
+        - name: api
+          image: ffxiv-multimodal-rag-assistant:latest
+          ports:
+            - containerPort: 8000

@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+.env
+vector_db/*
+!vector_db/.gitkeep
+!vector_db/README.md
+sample_data/synthetic_screenshots/*
+!sample_data/synthetic_screenshots/.gitkeep
+outputs/
+.DS_Store
+Thumbs.db
