@@ -1,0 +1,8 @@
+labels:
+  character_name: 角色名称
+  personality: 性格
+  likes: 喜欢的东西
+  dislikes: 讨厌的东西
+  quote: 台词
+  job: 职业
+  weapon: 武器

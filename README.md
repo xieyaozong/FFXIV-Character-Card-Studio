@@ -1,80 +1,74 @@
-# FFXIV Multimodal RAG Assistant
+# FFXIV-Character-Card-Studio
 
-Personal Final Fantasy XIV note assistant with retrieval citations and optional screenshot context.
+Local tool for turning Final Fantasy XIV character screenshots into editable character profiles, avatars, expression sheets, and introduction cards.
 
-## Flow
+This is an unofficial personal project. FINAL FANTASY XIV and related names and assets belong to their respective rights holders; the repository does not redistribute game assets, screenshots, or model weights.
 
-```text
-User Question
-  -> Retriever searches personal FF14 notes
-  -> Relevant chunks + citations
-  -> LLM-style answer
-```
+The first milestone covers screenshot import, background removal, VLM feature candidates, user review, multilingual entity mapping, and structured prompt plans. Image generation and LoRA training are installed separately after the GPU environment is confirmed.
 
-Optional screenshot path:
+## Workflow
 
 ```text
-Screenshot
-  -> VLM caption / UI extraction
-  -> RAG context
-  -> Answer with visual context
+Character screenshots
+  -> background removal and crop review
+  -> local VLM feature candidates
+  -> multilingual FFXIV entity matching
+  -> user confirmation
+  -> character and outfit profiles
+  -> prompt plan
+  -> panel generation
+  -> postcard / avatar composition
 ```
 
-## Data Policy
+## Design Rules
 
-Do not copy large sections of official wikis, guides, or third-party攻略 sites into this repository. Keep personal notes in `docs_source/`, or add download/link scripts that point users to official sources.
+- Screenshot evidence comes first; the app does not invent jobs, weapons, pets, or props.
+- Every detected feature remains editable and requires confirmation when uncertain.
+- Job and weapon sections are optional and hidden when not selected.
+- Japanese, Chinese, and English names map to language-neutral entity IDs.
+- Exact card text is rendered by the layout engine rather than the diffusion model.
+- Private screenshots, model weights, LoRA files, and full-size outputs stay outside git.
 
-## MVP
-
-- Markdown notes to local vector index.
-- Question answering with citations.
-- Refuse to answer when no source is relevant.
-- Docker-ready FastAPI and Streamlit entry points.
-
-## Run
+## Base Setup
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\activate
-pip install -r requirements.txt
-python scripts/build_index.py
-streamlit run app/ui/streamlit_app.py
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
-CLI:
-
-```powershell
-python scripts/run_chat.py "How should I prepare for raid mitigation?"
-```
-
-API:
+Run the API:
 
 ```powershell
 uvicorn app.main:app --reload
 ```
 
-## Docker
+Run the UI:
 
 ```powershell
-docker compose up --build
+python -m app.ui.gradio_app
 ```
 
-## Layout
+## GPU Setup
+
+Torch, the VLM stack, diffusion models, ControlNet, IP-Adapter, and LoRA training tools are intentionally not installed by `requirements.txt`. See `docs/gpu_and_models.md` after confirming the GPU model and VRAM.
+
+The default VLM target is `Qwen/Qwen3-VL-4B-Instruct`; no model weights are downloaded during the base setup.
+
+## Repository Layout
 
 ```text
-ffxiv-multimodal-rag-assistant/
-  app/          FastAPI routes and Streamlit UI
-  rag/          document loading, chunking, retrieval, answer/citation formatting
-  vlm/          screenshot preprocessing and multimodal prompt hooks
-  docs_source/  personal sample notes
-  vector_db/    local generated index
-  sample_data/  demo queries and synthetic screenshot folder
-  scripts/      index, chat, evaluation, cleanup
-  eval/         retrieval evaluation fixtures
-  infra/        AWS and Kubernetes notes/manifests
-  docs/         architecture and limitation notes
+app/                 FastAPI and Gradio entry points
+src/domain/          profile, evidence, and generation-plan schemas
+src/preprocessing/   image loading, background removal, crops, color palette
+src/vlm/             replaceable VLM adapter and feature analysis
+src/catalog/         multilingual FFXIV entity resolution
+src/prompting/       structured prompt fragments and compiler
+content_packs/ffxiv/ locale and entity data
+configs/presets/     output, style, pose, and expression presets
+private_inputs/      local screenshots ignored by git
+outputs/             local generated files ignored by git
+docs/                architecture, data policy, and GPU/model setup
+tests/               schema and preprocessing checks
 ```
-
-## Notes
-
-The current index uses a local TF-IDF retriever so it runs without API keys. Swap `rag/embedder.py` and `rag/vector_store.py` for OpenAI embeddings, Chroma, FAISS, LangChain, or LlamaIndex when needed.

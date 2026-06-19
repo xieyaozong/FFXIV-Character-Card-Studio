@@ -1,0 +1,9 @@
+content_pack: ffxiv
+data_version: 0.1.0
+game_version: unverified
+locales:
+  - ja-JP
+  - zh-CN
+  - zh-TW
+  - en-US
+entity_file: entities.yaml

@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 from fastapi import APIRouter
-from app.config import settings
-from app.schemas import HealthResponse
+from src.config import settings
 
 
 router = APIRouter(tags=["health"])
 
 
-@router.get("/health", response_model=HealthResponse)
-def health() -> HealthResponse:
-    return HealthResponse(status="ok", index_ready=settings.vector_db_path.exists())
+@router.get("/health")
+def health() -> dict:
+    return {
+        "status": "ok",
+        "background_backend": settings.background_backend,
+        "vlm_backend": settings.vlm_backend,
+        "vlm_model_id": settings.vlm_model_id,
+    }

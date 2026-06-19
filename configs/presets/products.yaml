@@ -1,0 +1,10 @@
+products:
+  - id: introduction_card
+    label: Introduction card
+    canvas: [2048, 3072]
+  - id: avatar_pack
+    label: Avatar pack
+    canvas: [3072, 2048]
+  - id: dense_character_sheet
+    label: Dense character sheet
+    canvas: [2048, 3072]

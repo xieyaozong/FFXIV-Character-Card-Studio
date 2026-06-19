@@ -1,20 +1,12 @@
 services:
-  api:
+  studio:
     build: .
     ports:
+      - "7860:7860"
       - "8000:8000"
     env_file:
       - .env.example
     volumes:
-      - ./docs_source:/app/docs_source:ro
-      - ./vector_db:/app/vector_db
-  ui:
-    build: .
-    command: streamlit run app/ui/streamlit_app.py --server.address 0.0.0.0 --server.port 8501
-    ports:
-      - "8501:8501"
-    env_file:
-      - .env.example
-    volumes:
-      - ./docs_source:/app/docs_source:ro
-      - ./vector_db:/app/vector_db
+      - ./private_inputs:/app/private_inputs
+      - ./outputs:/app/outputs
+      - ./models:/app/models

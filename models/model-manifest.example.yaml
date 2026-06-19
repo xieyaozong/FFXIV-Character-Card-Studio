@@ -1,0 +1,43 @@
+models:
+  - role: vlm
+    model_id: Qwen/Qwen3-VL-4B-Instruct
+    revision: pin-before-download
+    license: apache-2.0
+    required: true
+
+  - role: segmentation_optional
+    model_id: facebook/sam2.1-hiera-small
+    revision: pin-before-download
+    license: apache-2.0
+    required: false
+
+  - role: diffusion_base
+    model_id: stabilityai/stable-diffusion-xl-base-1.0
+    revision: pin-before-download
+    license: openrail++
+    required: true
+
+  - role: image_identity_conditioning
+    model_id: h94/IP-Adapter
+    revision: pin-before-download
+    license: apache-2.0
+    required: true
+
+  - role: pose_conditioning
+    model_id: xinsir/controlnet-openpose-sdxl-1.0
+    revision: pin-before-download
+    license: apache-2.0
+    required: false
+
+local_weights:
+  - role: character_lora
+    path: models/private/character.safetensors
+    base_model: stabilityai/stable-diffusion-xl-base-1.0
+    training_data: private FFXIV screenshots
+    publish: false
+
+  - role: style_lora_optional
+    path: models/private/style.safetensors
+    base_model: stabilityai/stable-diffusion-xl-base-1.0
+    training_data: verify rights before training
+    publish: false
