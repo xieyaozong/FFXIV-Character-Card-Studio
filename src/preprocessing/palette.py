@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from PIL import Image
 import cv2
 import numpy as np
+from PIL import Image
 
 
 def rgb_to_hex(color: np.ndarray) -> str:

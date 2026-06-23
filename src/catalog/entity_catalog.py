@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from pydantic import BaseModel, Field
+
 import yaml
+from pydantic import BaseModel, Field
 
 
 class EntityRecord(BaseModel):
@@ -12,6 +13,10 @@ class EntityRecord(BaseModel):
     aliases: dict[str, list[str]] = Field(default_factory=dict)
     visual_prompt: str = ""
     negative_prompt: list[str] = Field(default_factory=list)
+    game_version: str = ""
+    source: str = ""
+    reviewed_at: str = ""
+    notes: str = ""
 
 
 class EntityCatalog:

@@ -11,10 +11,17 @@ models:
     license: apache-2.0
     required: false
 
-  - role: diffusion_base
+  - role: diffusion_baseline
     model_id: stabilityai/stable-diffusion-xl-base-1.0
     revision: pin-before-download
     license: openrail++
+    required: false
+
+  - role: diffusion_primary
+    model_id: OnomaAIResearch/Illustrious-xl-early-release-v0
+    filename: Illustrious-XL-v0.1.safetensors
+    path: models/diffusion/illustrious-xl-v0.1/Illustrious-XL-v0.1.safetensors
+    license: review-model-card
     required: true
 
   - role: image_identity_conditioning
@@ -30,14 +37,28 @@ models:
     required: false
 
 local_weights:
-  - role: character_lora
-    path: models/private/character.safetensors
-    base_model: stabilityai/stable-diffusion-xl-base-1.0
-    training_data: private FFXIV screenshots
+  - role: ffxiv_anatomy_lora
+    source: https://civitai.com/models/2541330
+    version_id: 2856048
+    path: models/loras/illustrious/ffxiv/au-ra-raen-facetype3-v2.safetensors
+    base_model: illustrious
     publish: false
 
-  - role: style_lora_optional
-    path: models/private/style.safetensors
-    base_model: stabilityai/stable-diffusion-xl-base-1.0
-    training_data: verify rights before training
+  - role: style_lora
+    source: https://civitai.com/models/1660846
+    version_id: 1879847
+    path: models/loras/illustrious/style/keyframe-animation-v1.1.safetensors
+    base_model: illustrious
+    sha256: 5B4CB44A80667255C695062EB6E9E8B8C9B2B9542596BF479FC109F4658D95B7
+    publish: false
+    review_required: true
+
+  - role: composition_lora
+    source: https://civitai.com/models/368139/character-sheet
+    version_id: 411375
+    path: models/loras/pony/composition/character-sheet-v1.safetensors
+    base_model: pony
+    enabled: false
+    compatibility: incompatible_with_current_illustrious_pipeline
+    sha256: E17AA78F3C51B3B35255905C0F32E88BF10D5723C50DC1105EB86AA9787F8583
     publish: false

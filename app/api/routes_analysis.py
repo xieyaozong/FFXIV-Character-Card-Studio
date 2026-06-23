@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Annotated
 
+from fastapi import APIRouter, File, HTTPException, UploadFile
+
 from src.domain.models import ScreenshotSummary
 from src.preprocessing.image_io import load_image
 from src.preprocessing.palette import extract_palette
-from fastapi import APIRouter, File, HTTPException, UploadFile
-
 
 router = APIRouter(prefix="/screenshots", tags=["screenshots"])
 

@@ -2,6 +2,10 @@
 
 The base environment deliberately excludes Torch and model weights.
 
+The verified local model stack uses `diffusers==0.38.0`, `transformers==4.57.6`, and
+`huggingface-hub==0.36.2`. Transformers 5.12 removed the CLIP structure expected by Diffusers single-file SDXL
+loading, so it is not used in this environment.
+
 ## GPU Packages Not Installed
 
 Use the official PyTorch wheel index that matches the NVIDIA driver:
@@ -43,11 +47,15 @@ SAM 2.1 requires Torch and a separate checkpoint, so it is not part of the base 
 
 ## Image Generation
 
-Recommended first generator:
+Primary anime generator for the next experiment:
 
 ```text
-stabilityai/stable-diffusion-xl-base-1.0
+OnomaAIResearch/Illustrious-xl-early-release-v0
 ```
+
+Use `Illustrious-XL-v0.1.safetensors` with the matching Illustrious LoRA set. Keep
+`stabilityai/stable-diffusion-xl-base-1.0` only as the original baseline; SDXL and Illustrious LoRAs must not be mixed
+without an explicit compatibility test.
 
 Additional conditioning:
 
@@ -62,15 +70,19 @@ The listed IP-Adapter and OpenPose ControlNet use Apache-2.0 model-card licenses
 
 The app should generate individual panels and compose cards afterward. Exact Chinese, Japanese, and English text must be rendered by Pillow or HTML, not by the diffusion model.
 
-## LoRA
+## LoRA Roles
 
 Keep two concepts separate:
 
 ```text
-Character LoRA: face, horns, hair, body proportions
-Outfit conditioning or outfit LoRA: clothing and accessories
-Optional style LoRA: sketch / notebook rendering style
+Anatomy LoRA: FFXIV race traits such as horns, scales, ears, and tail shape
+Reference conditioning: the current character's face, outfit, palette, and accessories
+Style LoRA: colored pencil, rough line art, and paper texture
+Composition LoRA: optional multi-view or reference-sheet arrangement
 ```
+
+Do not train one LoRA to own all four roles. The first Illustrious download batch and exact Windows PowerShell commands
+are listed in `docs/model_downloads.md`.
 
 Character LoRA preparation:
 

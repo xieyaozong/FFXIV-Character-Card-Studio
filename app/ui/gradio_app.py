@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+
+import gradio as gr
+
 from src.config import settings
 from src.preprocessing.background import remove_background
 from src.preprocessing.image_io import load_image_path
 from src.preprocessing.palette import extract_palette
-import gradio as gr
 
 
 def inspect_screenshots(files: list[str] | None, background_backend: str) -> tuple[list, dict]:

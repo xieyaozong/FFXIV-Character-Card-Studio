@@ -1,9 +1,20 @@
 from __future__ import annotations
 
 from json import JSONDecodeError, loads
+
 from PIL import Image
-from src.domain.models import VLMFeatureResponse
+
+from src.domain.models import EvidenceRef, VLMFeatureResponse
 from src.vlm.prompts import FEATURE_EXTRACTION_PROMPT
+
+
+def prepare_vlm_images(images: list[Image.Image], max_side: int = 1024) -> list[Image.Image]:
+    prepared: list[Image.Image] = []
+    for image in images:
+        resized = image.convert("RGB")
+        resized.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
+        prepared.append(resized)
+    return prepared
 
 
 def extract_json(text: str) -> dict:
@@ -38,6 +49,7 @@ class QwenVLMBackend:
         self.max_new_tokens = max_new_tokens
 
     def analyze(self, images: list[Image.Image]) -> VLMFeatureResponse:
+        images = prepare_vlm_images(images)
         messages = [
             {
                 "role": "user",
@@ -53,4 +65,21 @@ class QwenVLMBackend:
         generated = self.model.generate(**inputs, max_new_tokens=self.max_new_tokens, do_sample=False)
         trimmed = [output[len(source) :] for source, output in zip(inputs.input_ids, generated, strict=True)]
         response = self.processor.batch_decode(trimmed, skip_special_tokens=True)[0]
-        return VLMFeatureResponse.model_validate(extract_json(response))
+        result = VLMFeatureResponse.model_validate(extract_json(response))
+        result.identity = [
+            item for item in result.identity if "not visible" not in item.value.lower().replace("_", " ")
+        ]
+        result.outfit = [
+            item for item in result.outfit if "not visible" not in item.value.lower().replace("_", " ")
+        ]
+        for item in result.identity + result.outfit:
+            if not item.evidence:
+                item.evidence = [EvidenceRef(source_image="image_1")]
+        context_source = "image_2" if len(images) > 1 else "image_1"
+        for item in result.job.candidates + result.weapon.candidates:
+            if not item.evidence:
+                item.evidence = [EvidenceRef(source_image=context_source)]
+        has_visible_evidence = bool(result.identity or result.outfit or result.job.include or result.weapon.include)
+        if not has_visible_evidence:
+            raise ValueError("VLM returned no visible character evidence.")
+        return result

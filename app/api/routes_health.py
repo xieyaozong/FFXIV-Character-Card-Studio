@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from fastapi import APIRouter
-from src.config import settings
 
+from src.config import settings
 
 router = APIRouter(tags=["health"])
 

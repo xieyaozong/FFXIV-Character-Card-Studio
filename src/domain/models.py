@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+
 from pydantic import BaseModel, Field
 
 
@@ -10,6 +11,12 @@ class EvidenceStatus(StrEnum):
     NOT_VISIBLE = "not_visible"
     CONFIRMED_NONE = "confirmed_none"
     USER_ADDED = "user_added"
+
+
+class CompatibilityMode(StrEnum):
+    STRICT = "strict"
+    ADVISORY = "advisory"
+    FREEFORM = "freeform"
 
 
 class EvidenceRef(BaseModel):
@@ -39,10 +46,21 @@ class OutfitProfile(BaseModel):
     palette: list[str] = Field(default_factory=list)
 
 
+class AnatomyProfile(BaseModel):
+    race_id: str = ""
+    clan_id: str = ""
+    compatibility: CompatibilityMode = CompatibilityMode.ADVISORY
+    required_traits: list[str] = Field(default_factory=list)
+    conditional_traits: list[str] = Field(default_factory=list)
+    forbidden_traits: list[str] = Field(default_factory=list)
+    confirmed: bool = False
+
+
 class CharacterProfile(BaseModel):
     profile_id: str
     display_name: str = ""
     locale: str = "zh-TW"
+    anatomy: AnatomyProfile = Field(default_factory=AnatomyProfile)
     identity_features: list[FeatureCandidate] = Field(default_factory=list)
     outfits: list[OutfitProfile] = Field(default_factory=list)
     job: OptionalEntity = Field(default_factory=OptionalEntity)

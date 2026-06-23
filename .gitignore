@@ -7,11 +7,19 @@ venv/
 .env
 .gradio/
 .cache/
+
+# Claude Code tooling config (personal, machine-specific)
+.claude/
+
+# Model weights, LoRAs, and conditioning checkpoints (downloaded locally, never published)
 models/*
 !models/README.md
 !models/model-manifest.example.yaml
 loras/
 checkpoints/
+
+# Private FFXIV screenshots and generated output (never published)
+character/
 private_inputs/*
 !private_inputs/.gitkeep
 outputs/*

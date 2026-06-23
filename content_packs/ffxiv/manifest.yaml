@@ -7,3 +7,5 @@ locales:
   - zh-TW
   - en-US
 entity_file: entities.yaml
+anatomy_file: anatomy_rules.yaml
+default_compatibility: advisory

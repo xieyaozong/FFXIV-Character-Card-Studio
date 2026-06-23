@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from io import BytesIO
 
-from PIL import Image, ImageFilter
 import cv2
 import numpy as np
+from PIL import Image, ImageFilter
 
 
 def remove_blue_screen(image: Image.Image) -> Image.Image:
@@ -33,3 +33,27 @@ def remove_background(image: Image.Image, backend: str) -> Image.Image:
     if backend == "rembg":
         return remove_with_rembg(image)
     raise ValueError(f"Unknown background backend: {backend}")
+
+
+def alpha_bbox(alpha: np.ndarray, threshold: int = 16) -> tuple[int, int, int, int] | None:
+    rows, cols = np.where(alpha > threshold)
+    if cols.size == 0:
+        return None
+    return int(cols.min()), int(rows.min()), int(cols.max()) + 1, int(rows.max()) + 1
+
+
+def pad_bbox(
+    bbox: tuple[int, int, int, int],
+    size: tuple[int, int],
+    pad_ratio: float = 0.08,
+) -> tuple[int, int, int, int]:
+    left, top, right, bottom = bbox
+    pad_x = round((right - left) * pad_ratio)
+    pad_y = round((bottom - top) * pad_ratio)
+    max_w, max_h = size
+    return (
+        max(0, left - pad_x),
+        max(0, top - pad_y),
+        min(max_w, right + pad_x),
+        min(max_h, bottom + pad_y),
+    )
