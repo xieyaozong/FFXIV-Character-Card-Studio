@@ -1,0 +1,226 @@
+# Knowledge Layer — Design
+
+> **Audience:** contributors to this project, including AI coding agents. This document is written to be
+> self-contained: read it before touching the VLM extraction, the content packs, or the prompt/spec compiler.
+> It explains *why* the design is shaped this way, not only *what* to build.
+
+## 1. What this project produces
+
+A **personalized FFXIV character profile card** — a multi-panel reference sheet (hero portrait, full-body
+turnaround, expression sheet, chibi poses, color palette, personality notes, optional pet). Reference examples (made
+with a cloud image model, kept private) define the *output*, not the *implementation*.
+
+The card sections map almost field-for-field onto the existing [`CharacterProfile`](../src/domain/models.py) schema,
+which is the central artifact of the whole system.
+
+## 2. The ultimate goal (the north star)
+
+**An end user drops in a screenshot and gets a correct card without typing prompts to explain anything.**
+The system recognizes *what is in the screenshot* on its own. When FFXIV ships a new race or changes an NPC, the
+**maintainer updates a database** and recognition keeps working — no model retraining, no end-user explanation.
+
+This produces **two kinds of user with different jobs:**
+
+| User | Input | Must never have to |
+| --- | --- | --- |
+| **End user** | a screenshot (+ optional personality flavor) | type prompts to explain race/anatomy/lore |
+| **Maintainer** (project owner) | edits the knowledge DB (YAML) | retrain a model to add a new race |
+
+**Lore is the floor; personalization is the product.** The knowledge layer exists only to prevent
+immersion-breaking errors (wrong/lost tails, phantom human ears on a Miqo'te, missing Au Ra scales). Everything
+else — including deliberately non-canon choices such as a MOD hairstyle the game does not ship — stays the user's.
+
+## 3. Core principle: separate *perception* from *recognition*
+
+This is the single most important decision in the design.
+
+| Layer | Job | Needs FFXIV knowledge? |
+| --- | --- | --- |
+| **VLM = perception** | Report raw, discriminating anatomical traits it can see (ear type, horns, scales, tail type, stature, weapon shape). | **No.** It only has to see accurately. |
+| **Knowledge DB = recognition** | Match observed traits against each race's visual signature → canonical race / clan (+ optional job / weapon). | **Yes**, and it is maintainer-editable data, not model weights. |
+
+Why split them:
+
+- **New content = data update, not fine-tuning.** A new race in a new patch becomes one new signature record, and
+  the system recognizes it immediately.
+- **Deterministic and explainable.** Race identity is decided by rule-matching against data, so a wrong result is a
+  data fix, not a black-box retrain.
+- **The VLM stays swappable.** Any capable VLM that reports traits accurately works; it never has to "know FFXIV."
+
+> Consequence for prompt work: the next improvement to VLM extraction is **not** prettier generation prompts. It is
+> redesigning extraction to elicit the *discriminating traits the recognizer needs*. Past failure: the VLM described
+> Au Ra horns as `"black cap with white horn-like protrusions"` — perception that recognition cannot use.
+
+## 4. The FFXIV race problem (why this layer is necessary)
+
+Base image and vision models do not understand FFXIV's playable races, so they hallucinate generic-anime anatomy:
+Miqo'te drawn with human ears, Au Ra scales dropped, tails redrawn as the wrong kind, Lalafell sized like normal
+adults, Elezen rendered as blonde western-fantasy elves. The error-prone races are exactly the non-human ones.
+
+The eight playable races and the **traits that discriminate them**:
+
+| Race (EN / 日本語 / 繁中) | Decisive signature |
+| --- | --- |
+| Hyur / ヒューラン / 人族 | Baseline human; no special markers (the fallback). |
+| Elezen / エレゼン / 精靈族 | Tall + long pointed ears; **no** horns/scales/feline traits; not western-elf coloring. |
+| Lalafell / ララフェル / 拉拉菲爾族 | Very short, child-like stature (decisive). |
+| Miqo'te / ミコッテ / 貓魅族 | Feline ears on top of head + furred tail + slit pupils. |
+| Roegadyn / ルガディン / 魯加族 | Very large, muscular build; human ears. |
+| Au Ra / アウラ / 敖龍族 | Horns + facial/body scales + scaled tail + limbal-ring eyes. |
+| Hrothgar / ロスガル / 硌獅族 | Leonine/feline face (muzzle) + large build. |
+| Viera / ヴィエラ / 維埃拉族 | Very long rabbit-like ears + tall. |
+
+Clans (e.g. Au Ra → Raen / Xaela, Miqo'te → Seekers of the Sun / Keepers of the Moon) refine skin/scale coloring and
+some traits; they are a second recognition step after race.
+
+## 5. Data model (what the maintainer edits)
+
+Everything lives in [`content_packs/ffxiv/`](../content_packs/ffxiv/) as human-editable YAML. **The YAML is the single
+source of truth.** A vector index, if added later, is a *derived* artifact built from this YAML, never a replacement.
+
+Current files:
+
+- `manifest.yaml` — data version, locales, active files, default compatibility.
+- `entities.yaml` — canonical IDs + multilingual aliases for races, clans, jobs, weapons, NPCs (loaded by
+  [`EntityCatalog`](../src/catalog/entity_catalog.py)). Currently a template with no records yet.
+- `anatomy_rules.yaml` — required / conditional / forbidden traits and generation tokens. Currently holds one
+  profile (`au_ra_raen_female`).
+- `locales/` — interface labels only.
+
+**Proposed addition — race *signatures* for recognition.** Today `anatomy_rules.yaml` encodes what a race must look
+like for *generation*; recognition additionally needs the *discriminating perception traits*. Proposed shape (exact
+file organization is a maintainer decision — new `race_signatures.yaml`, or a `signature:` block inside each anatomy
+profile):
+
+```yaml
+races:
+  au_ra:
+    names: { ja-JP: アウラ, zh-TW: 敖龍族, en-US: Au Ra }
+    clans: [raen, xaela]
+    signature:            # discriminating traits the recognizer matches against VLM perception
+      horns: required     # decisive: horns ⇒ Au Ra
+      scales: required    # decisive: face/neck/body scales
+      tail: scaled
+      ears: human_small
+      stature: average
+    eliminates: [feline_ears, rabbit_ears, leonine_face]   # traits that rule this race out
+    # generation/anatomy rules continue to live in anatomy_rules.yaml, keyed by race[_clan_gender]
+```
+
+Maintenance rules already documented in [`content_packs/ffxiv/README.md`](../content_packs/ffxiv/README.md): stable
+lowercase IDs, verified multilingual names, `game_version` / `source` / `reviewed_at` per record, **NPC appearances
+versioned by new ID instead of overwriting**. Run `tests/test_content_pack.py` before bumping `data_version`.
+
+## 6. Recognition flow
+
+```text
+screenshot
+  │  (preprocessing: triage + subject crop + background removal — already implemented)
+  ▼
+VLM perception  →  structured traits with confidence
+  │              ear_type, horns, scales, tail_type, stature, face_type, weapon_shape, + universal visuals
+  ▼
+race recognizer →  score each race signature vs observed traits; apply eliminations
+  │              decisive trait seen ⇒ assign; defining trait occluded/ambiguous ⇒ low confidence
+  ▼
+clan refinement (optional) + job/weapon recognition (optional, from weapon shape / job icon)
+  ▼
+anatomy fill   →  inject required / forbidden traits + generation tokens for the recognized race
+  ▼
++ user personality input (personality / likes / dislikes / quote / mood — not derivable from a screenshot)
+  ▼
+CharacterProfile spec  →  master prompt / panel specs
+  ▼
+render (swappable — see §9)
+```
+
+**Recognizer logic** is deterministic rule-matching, not vector search:
+
+- Some traits are **decisive** (horns+scales ⇒ Au Ra; feline ears+tail ⇒ Miqo'te; very long rabbit ears ⇒ Viera;
+  leonine face ⇒ Hrothgar; very short stature ⇒ Lalafell).
+- Some traits are **eliminating** (clearly visible round human ears ⇒ not Miqo'te/Viera/Hrothgar).
+- Score = weighted matches − eliminations, weighting decisive traits highest. Best score over a threshold wins;
+  otherwise the result is "uncertain" and the UX asks for one confirmation (§7).
+
+This maps onto the existing schema: VLM output is [`VLMFeatureResponse`](../src/domain/models.py); recognized facts
+land in [`AnatomyProfile`](../src/domain/models.py) (`race_id`, `clan_id`, required/forbidden traits) and the
+optional [`OptionalEntity`](../src/domain/models.py) job/weapon slots.
+
+## 7. Confidence & confirmation UX
+
+The zero-prompt ideal degrades gracefully — **never into prompt writing.**
+
+| Recognition confidence | Behavior |
+| --- | --- |
+| High (decisive trait clearly seen) | Auto-assign race; no interruption. |
+| Medium | Assign, mark `detected`; user can correct with one tap. |
+| Low / ambiguous (defining trait occluded — horns under a hat, back-facing shot) | Ask the user to pick the race from a short list, pre-ranked by partial evidence. One selection, no text. |
+
+Backed by existing schema fields: [`EvidenceStatus`](../src/domain/models.py) (`DETECTED` / `UNCERTAIN` /
+`CONFIRMED_NONE` / `USER_ADDED`), per-feature `confidence`, and one-time confirmation. These exist but are **not yet
+wired** to a recognizer.
+
+**Evidence priority** (from [`anatomy_rules.yaml`](../content_packs/ffxiv/anatomy_rules.yaml) and
+[`docs/architecture.md`](architecture.md)): `user_override > confirmed_screenshot > canonical_default > model_guess`.
+
+**Mods / overrides.** Hair, outfit, and color are the *universal layer* and are never gated by race rules, so a MOD
+hairstyle always survives. Mods rarely alter core race anatomy, so recognition still holds. `CompatibilityMode`
+(`strict` / `advisory` / `freeform`) sets how hard anatomy is enforced; **strictness is per output product** — a
+character card stays loose (`advisory`), a future lore-accurate portrait can be `strict`.
+
+## 8. Mapping: card section → schema field → source
+
+| Card section | `CharacterProfile` field | Source |
+| --- | --- | --- |
+| Race / clan | `anatomy.race_id`, `anatomy.clan_id` | **Recognition (DB)** |
+| Job | `job` (OptionalEntity) | Recognition (job icon / weapon) or user |
+| Weapon | `weapon` (OptionalEntity) | Recognition (weapon shape) or user |
+| Personality / likes / dislikes / quote / mood | `personality`, `likes`, `dislikes`, `quote` | **User input** (not in screenshots) |
+| Hair / outfit / colors | `identity_features`, `outfits`, `palette` | VLM perception + user |
+| Expressions / poses / view / product | `PanelRequest` + `configs/presets/` | User selects |
+| Color palette | `palette` | `extract_palette` (implemented) |
+
+## 9. The renderer is swappable; the spec is the deliverable
+
+The durable output of this system is the **profile spec** (a populated `CharacterProfile` plus a compiled master
+prompt). It can drive either:
+
+- **Path A — one-shot cloud composer** (e.g. a strong image model that lays out the whole multi-panel sheet with
+  text in a single pass). Already proven by the maintainer's private reference cards. Fastest route to the target quality.
+- **Path B — fully local** panel generation (needs a character LoRA + IP-Adapter for cross-panel consistency) plus a
+  deterministic layout engine that renders text/palette/notes in code (Pillow/HTML), per
+  [`docs/architecture.md`](architecture.md). More control, no per-image cost, much larger build.
+
+The knowledge DB + spec is where this project's unique, maintainer-owned value lives. The renderer is a commodity
+that keeps improving; do not couple the spec to one renderer.
+
+## 10. Current state vs to-build
+
+**Implemented today:**
+
+- Preprocessing: triage, subject crop, background removal ([`src/preprocessing/`](../src/preprocessing/)).
+- VLM perception (freeform feature JSON) — [`src/vlm/`](../src/vlm/).
+- Visual-only prompt building (`build_prompt` in
+  [`scripts/run_baseline_experiment.py`](../scripts/run_baseline_experiment.py)); **does not use anatomy rules yet.**
+- Schemas, enums, compatibility modes ([`src/domain/models.py`](../src/domain/models.py)).
+- Entity catalog + content-pack scaffolding; `anatomy_rules.yaml` has one race.
+- Experimental SDXL / IP-Adapter generation (WIP, not part of the milestone).
+
+**To build (in rough order):**
+
+1. **Discriminating-trait VLM extraction** — rewrite [`FEATURE_EXTRACTION_PROMPT`](../src/vlm/prompts.py) to elicit
+   the §6 traits. *(This is the planned next concrete step.)*
+2. **Race signatures** for all eight races + the recognizer that matches traits → race/clan.
+3. **Wire anatomy rules into the spec** (required/forbidden traits + generation tokens) — the missing link in both
+   `build_prompt` and [`src/prompting/compiler.py`](../src/prompting/compiler.py).
+4. **Personality input layer** (UI form populating `personality` / `likes` / `dislikes` / `quote`).
+5. **Confidence + one-tap confirmation UX**.
+6. **Spec → renderer** adapter(s) for Path A and/or Path B.
+
+## 11. Open decisions
+
+- File organization of race signatures (new file vs. a block inside anatomy profiles).
+- Scope of job/weapon recognition for the first version (weapon-shape signatures, or defer to user selection).
+- Whether RAG is needed at all early on — structured matching covers race/anatomy; RAG is only worth it later for
+  fuzzy gear/NPC-name lookup, and even then it resolves *to* structured IDs.
+- Render path priority: A, B, or both in parallel.

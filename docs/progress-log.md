@@ -48,8 +48,8 @@ Newest entries first. Each entry follows the same shape:
 
 **Done:** Added IP-Adapter support so a high-strength redraw can keep the character's face.
 **Changed:** `--ip-adapter-*` options in `run_baseline_experiment.py`; `run.ps1` exposes `$IpAdapterScale`.
-**Tech:** IP-Adapter plus-face for SDXL; required the ViT-H image encoder (1280-dim), not the bigG one shipped under `sdxl_models` — that mismatch was the first failure.
-**Impact:** keystone for "redraw freely but stay recognizable"; downloaded and wired, end-to-end validation still pending.
+**Tech:** IP-Adapter plus-face for SDXL; required the ViT-H image encoder (1280-dim), not the bigG one shipped under `sdxl_models` — that mismatch was the first failure (loaded the ViT-H encoder explicitly and registered it on the pipeline).
+**Impact:** validated end-to-end — IP-Adapter 0.6 with strength 0.75 produced a full redraw (clean anime line art, not tracing) that kept the cap, Au Ra horns, sunglasses, headphones, outfit, and tail. Confirms the identity-vs-art trade-off is solvable: high-strength redraw + reference identity injection.
 
 ### Repo cleanup for first GitHub release
 
@@ -57,3 +57,10 @@ Newest entries first. Each entry follows the same shape:
 **Changed:** ruff import sorting repo-wide (added `I` rule); fixed lint (B008, E501); `.gitignore` now excludes `character/` and `.claude/settings.local.json`; removed an empty training stub; trimmed verbose comments; marked the generation half WIP; rewrote the README (English technical core, FFXIV sections in EN/JP/zh-TW).
 **Tech:** ruff, markdown, git.
 **Impact:** the public repo presents one finished stage (VLM → prompt) without leaking private screenshots, weights, or outputs, and without committing to a larger restructure yet.
+
+### Knowledge-layer design + collaborator onboarding
+
+**Done:** Wrote down the product vision and the recognition architecture, and added an onboarding entry point for contributors and AI agents.
+**Changed:** new `docs/knowledge-layer.md` (perception vs. recognition, race signatures, recognition flow, confidence/confirmation UX, CharacterProfile mapping, current-state vs. to-build); new `AGENTS.md`; README refined (English prose, FFXIV nouns kept trilingual, no About section, roadmap reframed around DB-driven recognition); `.gitignore` now excludes `example/`.
+**Tech:** —
+**Impact:** the design (zero-prompt goal, perception/recognition split, swappable renderer) is now legible enough for other contributors to pick up; private reference images stay out of git.

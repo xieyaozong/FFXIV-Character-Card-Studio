@@ -4,33 +4,17 @@
 
 **Turn Final Fantasy XIV character screenshots into editable profiles and character-card prompts — fully local.**
 
-ファイナルファンタジーXIV のキャラクタースクリーンショットを、編集可能なプロフィールとキャラクターカード用プロンプトに変換するローカルツール。
-
-將《Final Fantasy XIV》的角色截圖，轉換成可編輯的角色設定與角色卡 prompt 的本機工具。
-
 ![python](https://img.shields.io/badge/python-3.12-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![status](https://img.shields.io/badge/milestone-VLM→prompt-orange)
 
 </div>
 
-> Of all my side projects this is the most personal one: it is built around a game I actually play (on the Japanese data centers). Naming and scope are still settling, so expect the structure to grow one milestone at a time rather than all at once.
+> Of all my side projects this is the most personal one: it is built around a game I actually play (on the Japanese data centers). It grows one milestone at a time rather than all at once.
 
 ---
 
-## About / 概要 / 簡介
+## Disclaimer
 
-**EN** — A local pipeline that reads your own FFXIV screenshots, extracts *only what is visible* (hair, horns, scales, tail, outfit, accessories, visible weapon), and turns the reviewed result into a structured generation prompt. Everything runs on your machine; no screenshots or model weights leave it.
-
-**日本語** — 手元の FFXIV スクリーンショットから「実際に見えている要素」（髪・角・鱗・尻尾・衣装・アクセサリー・見えている武器）だけを抽出し、確認後に構造化されたプロンプトへ変換するローカルパイプラインです。すべて自分の PC 上で動作し、スクリーンショットやモデルの重みは外部に送信されません。
-
-**繁體中文** — 一條本機流程：讀取你自己的 FFXIV 截圖，只擷取「畫面中實際可見」的特徵（髮色、角、鱗、尾、服裝、配件、可見武器），經你確認後轉成結構化的生成 prompt。全程在本機執行，截圖與模型權重都不會外傳。
-
-## Disclaimer / 免責事項 / 免責聲明
-
-**EN** — This is an unofficial, personal fan project. FINAL FANTASY XIV and all related names, assets, and trademarks belong to SQUARE ENIX. This repository does **not** redistribute game assets, screenshots, or model weights.
-
-**日本語** — 本プロジェクトは非公式の個人ファンプロジェクトです。『ファイナルファンタジーXIV』および関連する名称・素材・商標はすべて株式会社スクウェア・エニックスに帰属します。本リポジトリはゲーム素材・スクリーンショット・モデルの重みを再配布しません。
-
-**繁體中文** — 本專案為非官方的個人同人專案。《FINAL FANTASY XIV》及其相關名稱、素材與商標皆屬於 SQUARE ENIX 所有。本儲存庫**不會**散布遊戲素材、截圖或模型權重。
+This is an unofficial, personal fan project. FINAL FANTASY XIV and all related names, assets, and trademarks belong to SQUARE ENIX. This repository does **not** redistribute game assets, screenshots, or model weights.
 
 ---
 
@@ -152,11 +136,11 @@ tests/               schema, preprocessing, and prompt checks
 - [x] Screenshot triage, subject crop, background removal
 - [x] Local VLM feature extraction (evidence-first JSON)
 - [x] Compact, CLIP-safe prompt building
+- [ ] **Next** — knowledge-DB-driven race / anatomy recognition, so screenshots are understood without the user writing prompts (see [docs/knowledge-layer.md](docs/knowledge-layer.md))
 - [ ] **WIP** — SDXL / IP-Adapter generation (identity-preserving redraw, face detailing, upscale)
-- [ ] Entity database + RAG for fuzzy equipment / NPC names
 - [ ] Deterministic card layout (text rendered by code, not the diffusion model)
 
-Progress is logged per session in [docs/progress-log.md](docs/progress-log.md).
+Design and direction: [docs/knowledge-layer.md](docs/knowledge-layer.md) · [docs/architecture.md](docs/architecture.md). Progress is logged per session in [docs/progress-log.md](docs/progress-log.md).
 
 ## Tech stack
 
