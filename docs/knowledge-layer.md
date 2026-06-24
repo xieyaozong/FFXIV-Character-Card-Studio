@@ -41,14 +41,20 @@ updates the knowledge base** and recognition keeps working — no model retraini
    personality, emphasized features) drives what is drawn; a *guardrail channel* (lore-driven: the recognized race's
    required traits as forced positives, forbidden traits as negatives + checks) clamps what must hold. They do not
    contaminate each other — user creativity is not diluted by lore, and lore is not mistaken for style.
-2. **Conflict resolution.** Styling is never clamped (a modded hairstyle always survives); race anatomy is clamped
-   unless the user explicitly overrides — via evidence priority (`user_override > confirmed_screenshot >
-   canonical_default > model_guess`) and `CompatibilityMode` (`strict` / `advisory` / `freeform`, set per product; a
-   character card runs loose).
+2. **Race anatomy is a hard invariant.** Styling (hair incl. mods, outfit, color, accessories, pose) is fully
+   user-driven and never clamped; the recognized race's defining anatomy is **non-negotiable** — the architecture
+   never produces a lore-violating composition (a human-eared Miqo'te, a short Hrothgar), whatever the input. This
+   does not fight the user: the game itself cannot make those, so a real character is already lore-valid, and the
+   invariant only blocks *generator errors*. There is no "user overrides the guardrail" path for anatomy.
 3. **Output validation + repair loop.** Prompt constraints do not *guarantee* obedience (a model can still draw the
    wrong ears despite a negative). So the generated image is checked back against the guardrails with the VLM
    (required traits present? forbidden traits absent?) and **repaired** when violated (redraw the face, inpaint,
    strengthen negatives, re-roll). This loop — not the prompt alone — is what actually keeps the output in-lore.
+
+The anatomy invariant is enforced at three points: the **UI** never exposes a raw high-privilege prompt — end users
+give constrained styling / personality / preset choices, so there is no way to *request* a violation (this also fits
+the zero-prompt goal); the **compiler** always emits the forbidden-trait negatives and required positives, with no
+override branch; the **validation loop** repairs any violation the model produces anyway.
 
 ## 3. Core principle: separate *perception* from *recognition*
 
@@ -212,13 +218,14 @@ Backed by existing schema fields: [`EvidenceStatus`](../src/domain/models.py) (`
 `CONFIRMED_NONE` / `USER_ADDED`), per-feature `confidence`, and one-time confirmation. These exist but are **not yet
 wired** to a recognizer.
 
-**Evidence priority** (from [`anatomy_rules.yaml`](../content_packs/ffxiv/anatomy_rules.yaml) and
-[`docs/architecture.md`](architecture.md)): `user_override > confirmed_screenshot > canonical_default > model_guess`.
+**Evidence priority is per-layer.** The order `user_override > confirmed_screenshot > canonical_default >
+model_guess` (from [`anatomy_rules.yaml`](../content_packs/ffxiv/anatomy_rules.yaml) and
+[`docs/architecture.md`](architecture.md)) governs **race selection and styling / ambiguous facts only**. It never
+lets the user violate an established race's defining anatomy — that is a hard invariant (§2).
 
-**Mods / overrides.** Hair, outfit, and color are the *universal layer* and are never gated by race rules, so a MOD
-hairstyle always survives. Mods rarely alter core race anatomy, so recognition still holds. `CompatibilityMode`
-(`strict` / `advisory` / `freeform`) sets how hard anatomy is enforced; **strictness is per output product** — a
-character card stays loose (`advisory`), a future lore-accurate portrait can be `strict`.
+**Mods / overrides.** Hair, outfit, and color are the *universal styling layer* and are never gated by race rules, so
+a MOD hairstyle always survives. `CompatibilityMode` no longer decides *whether* anatomy is enforced (it always is);
+at most it tunes conditional / minor traits or stylization intensity — see §11.
 
 ## 8. Mapping: card section → schema field → source
 
@@ -279,4 +286,6 @@ that keeps improving; do not couple the spec to one renderer.
   gear/NPC names to structured IDs), but *when* to build it and how to chunk/enrich is open. Hard race/anatomy never
   uses it.
 - How much the data-authoring mode automates in v1 (full AI draft vs. assisted fields) before maintainer confirmation.
+- Whether `CompatibilityMode` (`strict` / `advisory` / `freeform`) survives now that race anatomy is a hard invariant
+  and styling is always free — it may only govern conditional / minor traits or stylization intensity, or be dropped.
 - Render path priority: A, B, or both in parallel.
