@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 from time import perf_counter
 
-from PIL import Image, ImageOps
+from PIL import Image, ImageFilter, ImageOps
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -105,6 +105,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--race-signatures", type=Path, default=Path("content_packs/ffxiv/race_signatures.yaml"))
     parser.add_argument("--anatomy-rules", type=Path, default=Path("content_packs/ffxiv/anatomy_rules.yaml"))
+    parser.add_argument(
+        "--face-detail",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Re-render the head region at high resolution and blend it back (face quality + repair).",
+    )
+    parser.add_argument("--face-detail-strength", type=float, default=0.5)
     return parser.parse_args()
 
 
@@ -205,6 +212,42 @@ def parse_lora_specs(values: list[str]) -> list[tuple[Path, float]]:
             raise FileNotFoundError(path)
         specs.append((path, weight))
     return specs
+
+
+def detail_face(pipeline, image, *, prompt, negative, ip_image, strength, steps, guidance, generator):
+    """Re-render the head region at high resolution and blend it back (mechanism 3 repair).
+
+    The face is tiny in a full-body frame, so the base model cannot render it and race anatomy
+    (horns, scales) gets suppressed. Cropping the head, upscaling, and regenerating fixes both.
+    """
+    width, height = image.size
+    box = (round(width * 0.16), 0, round(width * 0.84), round(height * 0.44))
+    crop = image.crop(box)
+    scale = 1024 / max(crop.size)
+    target = (max(8, round(crop.size[0] * scale / 8) * 8), max(8, round(crop.size[1] * scale / 8) * 8))
+
+    kwargs = {
+        "prompt": prompt,
+        "negative_prompt": negative,
+        "image": crop.resize(target, Image.Resampling.LANCZOS),
+        "strength": strength,
+        "guidance_scale": guidance,
+        "num_inference_steps": steps,
+        "generator": generator,
+    }
+    if ip_image is not None:
+        kwargs["ip_adapter_image"] = ip_image
+    detailed = pipeline(**kwargs).images[0].resize(crop.size, Image.Resampling.LANCZOS)
+
+    mask = Image.new("L", crop.size, 0)
+    margin_x = max(1, crop.size[0] // 10)
+    margin_y = max(1, crop.size[1] // 10)
+    mask.paste(255, (margin_x, margin_y, crop.size[0] - margin_x, crop.size[1] - margin_y))
+    mask = mask.filter(ImageFilter.GaussianBlur(radius=max(margin_x, margin_y) / 1.5))
+
+    result = image.copy()
+    result.paste(detailed, box[:2], mask)
+    return result
 
 
 def main() -> None:
@@ -406,6 +449,20 @@ def main() -> None:
     if ip_adapter_image is not None:
         generation_kwargs["ip_adapter_image"] = ip_adapter_image
     output_image = pipeline(**generation_kwargs).images[0]
+    if args.face_detail:
+        output_image.save(output_dir / "result_predetail.png")
+        face_prompt = fit_prompt_to_clip("portrait, detailed face, " + prompt_used, pipeline.tokenizer)
+        output_image = detail_face(
+            pipeline,
+            output_image,
+            prompt=face_prompt,
+            negative=negative_used,
+            ip_image=ip_adapter_image,
+            strength=args.face_detail_strength,
+            steps=args.steps,
+            guidance=args.guidance_scale,
+            generator=generator,
+        )
     output_image.save(output_dir / "result.png")
     generation_seconds = perf_counter() - generation_started
 
