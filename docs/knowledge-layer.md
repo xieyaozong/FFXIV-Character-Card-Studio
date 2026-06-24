@@ -13,22 +13,42 @@ with a cloud image model, kept private) define the *output*, not the *implementa
 The card sections map almost field-for-field onto the existing [`CharacterProfile`](../src/domain/models.py) schema,
 which is the central artifact of the whole system.
 
-## 2. The ultimate goal (the north star)
+## 2. Guiding principle: lore guards, the user drives
 
-**An end user drops in a screenshot and gets a correct card without typing prompts to explain anything.**
-The system recognizes *what is in the screenshot* on its own. When FFXIV ships a new race or changes an NPC, the
-**maintainer updates a database** and recognition keeps working — no model retraining, no end-user explanation.
+**This is the key of the whole architecture.** The FFXIV worldview is a *guardrail*, not a creative driver: its only
+job is to keep a generated character from breaking lore (wrong/lost tails, phantom human ears on a Miqo'te, missing
+Au Ra scales). The *features worth generating* come from the **user's needs** — their outfit, hairstyle (even a
+modded one), pose, personality, the things they want emphasized. The architecture's value is the reconciliation:
 
-This produces **two kinds of user with different jobs:**
+> **Maximize fidelity to the user's request while keeping the output inside FFXIV's race / anatomy bounds.**
+
+Lore never contributes "flavor"; it only prevents errors. Personalization is the product.
+
+### The north star (zero-prompt for the end user)
+
+An end user drops in a screenshot and gets a correct card **without typing prompts to explain anything**. The system
+recognizes *what is in the screenshot* on its own. When FFXIV ships a new race or changes an NPC, the **maintainer
+updates the knowledge base** and recognition keeps working — no model retraining, no end-user explanation.
 
 | User | Input | Must never have to |
 | --- | --- | --- |
 | **End user** | a screenshot (+ optional personality flavor) | type prompts to explain race/anatomy/lore |
-| **Maintainer** (project owner) | edits the knowledge DB (YAML) | retrain a model to add a new race |
+| **Maintainer** (project owner) | curates the knowledge base | retrain a model to add a new race |
 
-**Lore is the floor; personalization is the product.** The knowledge layer exists only to prevent
-immersion-breaking errors (wrong/lost tails, phantom human ears on a Miqo'te, missing Au Ra scales). Everything
-else — including deliberately non-canon choices such as a MOD hairstyle the game does not ship — stays the user's.
+### How the clamp works (three mechanisms)
+
+1. **Two independent channels into the generator.** A *content channel* (user-driven: outfit, hair incl. mods, pose,
+   personality, emphasized features) drives what is drawn; a *guardrail channel* (lore-driven: the recognized race's
+   required traits as forced positives, forbidden traits as negatives + checks) clamps what must hold. They do not
+   contaminate each other — user creativity is not diluted by lore, and lore is not mistaken for style.
+2. **Conflict resolution.** Styling is never clamped (a modded hairstyle always survives); race anatomy is clamped
+   unless the user explicitly overrides — via evidence priority (`user_override > confirmed_screenshot >
+   canonical_default > model_guess`) and `CompatibilityMode` (`strict` / `advisory` / `freeform`, set per product; a
+   character card runs loose).
+3. **Output validation + repair loop.** Prompt constraints do not *guarantee* obedience (a model can still draw the
+   wrong ears despite a negative). So the generated image is checked back against the guardrails with the VLM
+   (required traits present? forbidden traits absent?) and **repaired** when violated (redraw the face, inpaint,
+   strengthen negatives, re-roll). This loop — not the prompt alone — is what actually keeps the output in-lore.
 
 ## 3. Core principle: separate *perception* from *recognition*
 
