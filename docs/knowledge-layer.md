@@ -225,7 +225,7 @@ lets the user violate an established race's defining anatomy — that is a hard 
 
 **Mods / overrides.** Hair, outfit, and color are the *universal styling layer* and are never gated by race rules, so
 a MOD hairstyle always survives. `CompatibilityMode` no longer decides *whether* anatomy is enforced (it always is);
-at most it tunes conditional / minor traits or stylization intensity — see §12.
+at most it tunes conditional / minor traits or stylization intensity — see §13.
 
 ## 8. Mapping: card section → schema field → source
 
@@ -248,7 +248,7 @@ channels (§2) separate.
 (`required` / `forbidden` / `generation_tokens`) + the product / style preset.
 
 **Output — a `GenerationSpec`** (extends today's [`PromptPlan`](../src/domain/models.py)): `positive_prompt`,
-`negative_prompt`, `constraints: {required, forbidden}` (the checklist the validation loop reuses — §2, mechanism 3),
+`negative_prompt`, `constraints: {required, forbidden}` (the checklist the validation loop reuses — §11),
 and renderer params (IP-Adapter reference, panel / style).
 
 **Two channels, assembled as separate blocks (never woven together):**
@@ -291,7 +291,39 @@ prompt). It can drive either:
 The knowledge DB + spec is where this project's unique, maintainer-owned value lives. The renderer is a commodity
 that keeps improving; do not couple the spec to one renderer.
 
-## 11. Current state vs to-build
+## 11. Validation & repair loop (mechanism 3 in detail)
+
+This is the actual guarantee that the output stays in-lore — perception applied to the *generated image*, checked
+against the spec's constraint checklist.
+
+**The check (reuses everything):** run the same VLM used for input perception on the result, extract its traits, and
+compare against `GenerationSpec.constraints` (`{required, forbidden}`, emitted by §9 — no separate config).
+
+**Outcomes and repair** (escalating, region-targeted, bounded):
+
+| Case | Action |
+| --- | --- |
+| Pass (required present, forbidden absent) | done |
+| Missing required (e.g. scales dropped) | inpaint the region and re-emphasize that positive |
+| Forbidden present (e.g. human ears on a Miqo'te) | redraw / inpaint the **face region**, strengthen the negative, re-roll that area |
+| Still failing after N tries | best-of-N, or surface to the user |
+
+Most violations are facial (ears, horns, face scales), so the main repair is a **face-region inpaint** — the same
+face-detailer machinery (SAM crop → inpaint) used for quality. Only the offending region is touched; the user's other
+content is preserved.
+
+**Strictness (ties to the `CompatibilityMode` open decision, §13):** defining race anatomy (the human-eared Miqo'te
+case) is *always* repaired — it is the hard invariant (§2). Conditional / minor traits may be tolerated per product; a
+character card does not over-iterate on minutiae.
+
+**Per render path:** Path B (local panels) validates and repairs each panel naturally. Path A (one-shot cloud) must
+validate on cropped panels / faces after the fact, and repair is more limited (often a re-prompt rather than a precise
+inpaint) — a known weakness of Path A.
+
+**Maps to scaffolding:** architecture.md's **VLM validator** (missing traits / forbidden anatomy / outfit drift) is
+this loop; a `ValidationResult` model can carry the comparison.
+
+## 12. Current state vs to-build
 
 **Implemented today:**
 
@@ -316,7 +348,7 @@ that keeps improving; do not couple the spec to one renderer.
 7. **Data-authoring mode** (image/prose → VLM draft → confirm → write record) so the knowledge base is maintainable
    without hand-writing YAML (§5.3).
 
-## 12. Open decisions
+## 13. Open decisions
 
 - File organization of race signatures (new file vs. a block inside anatomy profiles).
 - Scope of job/weapon recognition for the first version (weapon-shape signatures, or defer to user selection).

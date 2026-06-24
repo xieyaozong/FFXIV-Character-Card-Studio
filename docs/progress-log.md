@@ -71,3 +71,10 @@ Newest entries first. Each entry follows the same shape:
 **Changed:** `content_packs/ffxiv/` real data (`anatomy_rules.yaml`, `entities.yaml`) untracked + git-ignored and shipped as `*.example.yaml` templates; `test_content_pack.py` validates against templates; both files scrubbed from all git history (git-filter-repo + force-push); `docs/knowledge-layer.md` §5 now covers natural-input → AI-draft → confirm authoring, three data types (hard rules / lore+RAG / images), and the public-framework / private-data split.
 **Tech:** git-filter-repo, force-push, ruff, pytest.
 **Impact:** the public repo is framework-only; the maintainer keeps their data private and grows it via image/prose + one confirmation instead of hand-writing YAML.
+
+### Knowledge-layer design detailed (guardrail principle + 3 clamp mechanisms)
+
+**Done:** Fleshed out the reconciliation design in `docs/knowledge-layer.md`.
+**Changed:** added the guardrail-vs-driver guiding principle (§2); race anatomy as a hard invariant with three enforcement points (UI / compiler / validator); per-layer evidence priority; §9 spec compilation (two channels assembled as separate blocks, lore-floor CLIP-budget priority, `constraints` output); §11 validation & repair loop (VLM checks the output against the constraint checklist, region-targeted face inpaint repair).
+**Tech:** —
+**Impact:** all three clamp mechanisms (channels / invariant / validation) now have written detail; the design is ready to implement from the §12 to-build list, starting with discriminating-trait VLM extraction.
