@@ -92,3 +92,10 @@ Newest entries first. Each entry follows the same shape:
 **Changed:** new `src/catalog/race_recognizer.py` (`RaceSignature`, `load_race_signatures`, `recognize_race` weighted decisive/eliminate matcher, `apply_canonical_traits` correction); `race_signatures.example.yaml` template with the real file git-ignored; tests in `test_race_recognizer.py`.
 **Tech:** pydantic, deterministic scoring.
 **Impact:** closes the perception → recognition loop. On the Au Ra case the recognizer picks the race from the decisive `horns=present` even though the VLM mis-typed the tail (furred) and missed scales, then locks those race-defining traits back to canonical (scaled tail, facial scales) — proving the VLM need not be perfect; the knowledge layer corrects from race context.
+
+### Implementation: guardrail spec compilation (third brick, §9)
+
+**Done:** Wired recognition → lore guardrails into the prompt (knowledge-layer §9).
+**Changed:** new `src/prompting/spec.py` (`GenerationSpec`, `compile_generation_spec` — two channels as separate blocks, lore-required tokens ahead of content, forbidden → negative, `constraints` checklist); refactored `build_prompt` into `content_terms` + a thin `build_prompt`; wired guardrails into the runner (`--guardrails` / `--race-signatures` / `--anatomy-rules`, emits `constraints.json`); fixed content extraction to also read headwear/glasses from outfit; tests in `test_generation_spec.py`.
+**Tech:** race recognizer, Illustrious + Au Ra/keyframe LoRA, IP-Adapter.
+**Impact:** an end-to-end run recognized `au_ra` from the VLM traits and injected the Au Ra LoRA trigger tokens + forbidden negatives, emitting `constraints.json`. The result is clean and faithful and hugely better than the initial SDXL-base outputs — but the guardrail tokens did **not** visibly strengthen horns/tail this run (IP-Adapter + the cap in the init image suppress them), and the extra tokens pushed content past the CLIP limit (boots/headphones dropped). This confirms prompt guardrails are necessary but not sufficient, and motivates mechanism 3 (output validation + repair), which `constraints.json` now feeds.

@@ -97,6 +97,14 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Reference image for IP-Adapter identity (defaults to the character face crop).",
     )
+    parser.add_argument(
+        "--guardrails",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Recognize the race and inject its lore guardrails (required tokens, forbidden negatives).",
+    )
+    parser.add_argument("--race-signatures", type=Path, default=Path("content_packs/ffxiv/race_signatures.yaml"))
+    parser.add_argument("--anatomy-rules", type=Path, default=Path("content_packs/ffxiv/anatomy_rules.yaml"))
     return parser.parse_args()
 
 
@@ -110,7 +118,7 @@ def primary_clause(value: str) -> str:
     return value.split(",")[0].strip()
 
 
-def build_prompt(features: dict[str, object], extra_prompt: str = "") -> str:
+def content_terms(features: dict[str, object]) -> list[str]:
     identity = {item["key"]: str(item["value"]) for item in features["identity"]}
     outfit = {item["key"]: str(item["value"]) for item in features["outfit"]}
 
@@ -141,9 +149,14 @@ def build_prompt(features: dict[str, object], extra_prompt: str = "") -> str:
             value = primary_clause(value)
             add(value if label in value.lower() else f"{value} {label}")
 
-    headwear = identity.get("headwear")
+    # The VLM may file headwear/glasses under identity or outfit; check both.
+    headwear = identity.get("headwear") or outfit.get("headwear")
     if headwear and is_visible(headwear):
         add(primary_clause(headwear))
+    glasses = outfit.get("glasses")
+    if glasses and is_visible(glasses):
+        glasses = primary_clause(glasses)
+        add(glasses if "glass" in glasses.lower() else f"{glasses} sunglasses")
 
     # Construction already names colors, so use it and skip the redundant color summary.
     construction = outfit.get("clothing_construction")
@@ -159,7 +172,11 @@ def build_prompt(features: dict[str, object], extra_prompt: str = "") -> str:
         if any(name in item.lower() for name in ("headphone", "glove")):
             add(item)
 
-    body = ", ".join(terms)
+    return terms
+
+
+def build_prompt(features: dict[str, object], extra_prompt: str = "") -> str:
+    body = ", ".join(content_terms(features))
     return ", ".join(part for part in (extra_prompt, STYLE_PROMPT, body) if part)
 
 
@@ -246,10 +263,42 @@ def main() -> None:
         encoding="utf-8",
     )
 
-    prompt = args.prompt_override.strip() or build_prompt(features, args.extra_prompt)
-    negative_prompt = ", ".join(
-        part for part in (NEGATIVE_PROMPT, args.extra_negative) if part
+    negative_prompt = ", ".join(part for part in (NEGATIVE_PROMPT, args.extra_negative) if part)
+    race_id: str | None = None
+    guardrails_on = (
+        args.guardrails
+        and not args.prompt_override.strip()
+        and args.race_signatures.is_file()
+        and args.anatomy_rules.is_file()
     )
+    if args.prompt_override.strip():
+        prompt = args.prompt_override.strip()
+    elif guardrails_on:
+        import yaml
+
+        from src.catalog.race_recognizer import load_race_signatures
+        from src.domain.models import RaceTraits
+        from src.prompting.spec import compile_generation_spec
+
+        spec = compile_generation_spec(
+            content_terms=content_terms(features),
+            style_prompt=STYLE_PROMPT,
+            base_negative=negative_prompt,
+            traits=RaceTraits.model_validate(features.get("traits", {})),
+            race_signatures=load_race_signatures(args.race_signatures),
+            anatomy_rules=yaml.safe_load(args.anatomy_rules.read_text(encoding="utf-8")) or {},
+            extra_prompt=args.extra_prompt,
+        )
+        prompt = spec.positive_prompt
+        negative_prompt = spec.negative_prompt
+        race_id = spec.race_id
+        (output_dir / "constraints.json").write_text(
+            json.dumps({"race_id": race_id, **spec.constraints}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        print(f"recognized race: {race_id}")
+    else:
+        prompt = build_prompt(features, args.extra_prompt)
     (output_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
     if args.features_only:
         timings = {
