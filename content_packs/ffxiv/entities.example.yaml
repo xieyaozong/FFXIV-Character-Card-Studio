@@ -1,0 +1,19 @@
+# Example entity records — the FORMAT only.
+# Copy this file to `entities.yaml` and add your own verified records.
+# Your real `entities.yaml` is git-ignored: your curated knowledge is yours to keep.
+
+entities:
+  - canonical_id: race.example          # stable lowercase ID; never changes with translations
+    entity_type: race                   # race | clan | job | weapon | equipment | npc
+    names:                              # add a language only after you verify the name
+      ja-JP: ""
+      zh-CN: ""
+      zh-TW: ""
+      en-US: "Example Race"
+    aliases: {}                         # extra spellings per locale, e.g. en-US: [Alt Name]
+    visual_prompt: ""
+    negative_prompt: []
+    game_version: ""                    # patch this record was verified against
+    source: ""
+    reviewed_at: ""                     # YYYY-MM-DD
+    notes: "Replace with your own verified entities."

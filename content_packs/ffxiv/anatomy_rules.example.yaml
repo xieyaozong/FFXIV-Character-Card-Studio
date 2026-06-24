@@ -1,0 +1,28 @@
+# Example anatomy rules — the FORMAT only.
+# Copy this file to `anatomy_rules.yaml` and fill it with your own curated data.
+# Your real `anatomy_rules.yaml` is git-ignored: the knowledge you build is yours, kept
+# private like model weights. This template ships so others can build their own database.
+
+version: 1
+default_compatibility: advisory        # strict | advisory | freeform
+
+evidence_priority:                      # who wins when sources disagree (highest first)
+  - user_override
+  - confirmed_screenshot
+  - canonical_default
+  - model_guess
+
+profiles:
+  # Key each profile by race[_clan[_gender]]. Replace with the races you maintain.
+  example_race_clan_gender:
+    required_traits:                    # MUST be present for this race (hard floor)
+      - example_required_trait
+    conditional_traits:                 # present only when actually visible
+      - example_conditional_trait
+    forbidden_traits:                   # must NOT appear (prevents broken anatomy)
+      - example_forbidden_trait
+    generation_tokens:                  # tokens for the renderer; values depend on your LoRAs
+      positive:
+        - <your-positive-token>
+      negative:
+        - <your-negative-token>

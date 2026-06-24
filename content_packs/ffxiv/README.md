@@ -2,12 +2,20 @@
 
 This directory is the editable source of truth for FFXIV-specific knowledge. Model weights are not the database.
 
+## Public framework vs. your data
+
+This repository ships the **format only**: the `*.example.yaml` templates, `manifest.yaml`, and these docs. The
+filled-in knowledge you curate (`anatomy_rules.yaml`, `entities.yaml`, `lore/`, reference images) is **git-ignored** —
+it is your IP, kept private like model weights. To start your own database, copy each `*.example.yaml` to the same
+name without `.example` and fill it in. Others can fork the framework and build their own data the same way.
+
 ## Files
 
-- `manifest.yaml`: data version, supported locales, and active data files.
-- `entities.yaml`: verified stable IDs and multilingual aliases for races, clans, jobs, weapons, equipment, and NPCs.
-- `anatomy_rules.yaml`: required, conditional, and forbidden visual traits plus generation tokens.
-- `locales/`: interface labels only.
+- `manifest.yaml`: data version, supported locales, and active data files. *(tracked)*
+- `*.example.yaml`: format templates to copy and fill. *(tracked)*
+- `entities.yaml`: verified stable IDs and multilingual aliases for races, clans, jobs, weapons, equipment, and NPCs. *(git-ignored, yours)*
+- `anatomy_rules.yaml`: required, conditional, and forbidden visual traits plus generation tokens. *(git-ignored, yours)*
+- `locales/`: interface labels only. *(tracked)*
 
 ## Update Rules
 

@@ -25,6 +25,13 @@ private_inputs/*
 !private_inputs/.gitkeep
 outputs/*
 !outputs/.gitkeep
+
+# Curated FFXIV knowledge data — the maintainer's IP, kept private like model weights.
+# Only the *.example.yaml templates and the format docs are published.
+content_packs/ffxiv/anatomy_rules.yaml
+content_packs/ffxiv/entities.yaml
+content_packs/ffxiv/lore/
+content_packs/ffxiv/reference/
 *.safetensors
 *.ckpt
 *.pt
