@@ -75,17 +75,29 @@ some traits; they are a second recognition step after race.
 
 ## 5. Data model (what the maintainer edits)
 
-Everything lives in [`content_packs/ffxiv/`](../content_packs/ffxiv/) as human-editable YAML. **The YAML is the single
-source of truth.** A vector index, if added later, is a *derived* artifact built from this YAML, never a replacement.
+The maintainer should almost never hand-write structured YAML. The natural inputs are an **image** or a **sentence**
+(a new race's look, an NPC, a weapon, a piece of lore); the system AI-drafts the structured record and the maintainer
+**reviews and confirms** it — the same perception → confirm pattern the end user gets, turned inward for authoring.
 
-Current files:
+### 5.1 Three data types, three representations
 
-- `manifest.yaml` — data version, locales, active files, default compatibility.
-- `entities.yaml` — canonical IDs + multilingual aliases for races, clans, jobs, weapons, NPCs (loaded by
-  [`EntityCatalog`](../src/catalog/entity_catalog.py)). Currently a template with no records yet.
-- `anatomy_rules.yaml` — required / conditional / forbidden traits and generation tokens. Currently holds one
-  profile (`au_ra_raen_female`).
-- `locales/` — interface labels only.
+| Data | Natural maintainer input | Stored / used as | Source of truth |
+| --- | --- | --- | --- |
+| **Hard rules** (race anatomy, entity IDs/aliases, weapon→job) | a reference image + a sentence | AI-drafted record → maintainer confirms → YAML | the structured record (the recognizer needs determinism) |
+| **Lore / worldview / story** | prose paragraphs | prose docs → RAG index | the prose itself (not derived from YAML) |
+| **Visual appearance** (race / NPC / gear) | an image | reference-image store → (a) draft a signature, (b) direct IP-Adapter reference, (c) visual-similarity match | the image |
+
+So "YAML is the single source of truth" holds only for **hard rules**. Lore lives as prose (RAG indexes it; the prose
+is primary, not a derived view of YAML). Images are source material for the other two.
+
+### 5.2 Structured records (the files)
+
+- `manifest.yaml` — data version, locales, active files, default compatibility. *(tracked / public)*
+- `*.example.yaml` — format templates to copy and fill. *(tracked / public)*
+- `anatomy_rules.yaml` — required / conditional / forbidden traits and generation tokens. *(git-ignored / private)*
+- `entities.yaml` — canonical IDs + multilingual aliases (loaded by
+  [`EntityCatalog`](../src/catalog/entity_catalog.py)). *(git-ignored / private)*
+- `locales/` — interface labels only. *(tracked / public)*
 
 **Proposed addition — race *signatures* for recognition.** Today `anatomy_rules.yaml` encodes what a race must look
 like for *generation*; recognition additionally needs the *discriminating perception traits*. Proposed shape (exact
@@ -110,6 +122,26 @@ races:
 Maintenance rules already documented in [`content_packs/ffxiv/README.md`](../content_packs/ffxiv/README.md): stable
 lowercase IDs, verified multilingual names, `game_version` / `source` / `reviewed_at` per record, **NPC appearances
 versioned by new ID instead of overwriting**. Run `tests/test_content_pack.py` before bumping `data_version`.
+
+### 5.3 Maintenance workflow (data authoring)
+
+A **data-authoring mode** in the app, separate from the end-user flow:
+
+1. The maintainer uploads a reference image and/or pastes a description.
+2. The VLM drafts a structured record (race signature, anatomy rules, entity names) — reusing the project's own
+   Qwen3-VL; a text step parses prose into fields.
+3. The maintainer reviews/edits the draft in a form and **confirms**.
+4. The confirmed record is written to the content pack with provenance (source, date, `game_version`).
+5. Lore prose is pasted into `lore/` and indexed for retrieval; no structuring required.
+
+The maintainer's job is *natural input + one confirmation*, not authoring YAML by hand.
+
+### 5.4 Public framework vs. private data (decided & implemented)
+
+The curated knowledge is the maintainer's IP, kept private like model weights. **Published = the framework only:**
+code, schema, format docs, and minimal `*.example.yaml` templates. The filled-in data (`anatomy_rules.yaml`,
+`entities.yaml`, `lore/`, reference images, any RAG index) is git-ignored. Others fork the framework and build their
+own database. Implemented 2026-06-23: templates shipped, real data untracked and scrubbed from history.
 
 ## 6. Recognition flow
 
@@ -216,11 +248,15 @@ that keeps improving; do not couple the spec to one renderer.
 4. **Personality input layer** (UI form populating `personality` / `likes` / `dislikes` / `quote`).
 5. **Confidence + one-tap confirmation UX**.
 6. **Spec → renderer** adapter(s) for Path A and/or Path B.
+7. **Data-authoring mode** (image/prose → VLM draft → confirm → write record) so the knowledge base is maintainable
+   without hand-writing YAML (§5.3).
 
 ## 11. Open decisions
 
 - File organization of race signatures (new file vs. a block inside anatomy profiles).
 - Scope of job/weapon recognition for the first version (weapon-shape signatures, or defer to user selection).
-- Whether RAG is needed at all early on — structured matching covers race/anatomy; RAG is only worth it later for
-  fuzzy gear/NPC-name lookup, and even then it resolves *to* structured IDs.
+- RAG timing and shape: its role is settled (it indexes lore prose — lore's own source of truth — and resolves fuzzy
+  gear/NPC names to structured IDs), but *when* to build it and how to chunk/enrich is open. Hard race/anatomy never
+  uses it.
+- How much the data-authoring mode automates in v1 (full AI draft vs. assisted fields) before maintainer confirmation.
 - Render path priority: A, B, or both in parallel.

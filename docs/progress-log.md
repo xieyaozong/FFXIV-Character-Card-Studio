@@ -64,3 +64,10 @@ Newest entries first. Each entry follows the same shape:
 **Changed:** new `docs/knowledge-layer.md` (perception vs. recognition, race signatures, recognition flow, confidence/confirmation UX, CharacterProfile mapping, current-state vs. to-build); new `AGENTS.md`; README refined (English prose, FFXIV nouns kept trilingual, no About section, roadmap reframed around DB-driven recognition); `.gitignore` now excludes `example/`.
 **Tech:** —
 **Impact:** the design (zero-prompt goal, perception/recognition split, swappable renderer) is now legible enough for other contributors to pick up; private reference images stay out of git.
+
+### Private knowledge data + maintenance model
+
+**Done:** Made the curated FFXIV knowledge data private (the maintainer's IP, like model weights) and folded the data-maintenance model into the design doc.
+**Changed:** `content_packs/ffxiv/` real data (`anatomy_rules.yaml`, `entities.yaml`) untracked + git-ignored and shipped as `*.example.yaml` templates; `test_content_pack.py` validates against templates; both files scrubbed from all git history (git-filter-repo + force-push); `docs/knowledge-layer.md` §5 now covers natural-input → AI-draft → confirm authoring, three data types (hard rules / lore+RAG / images), and the public-framework / private-data split.
+**Tech:** git-filter-repo, force-push, ruff, pytest.
+**Impact:** the public repo is framework-only; the maintainer keeps their data private and grows it via image/prose + one confirmation instead of hand-writing YAML.
