@@ -189,7 +189,7 @@ anatomy fill   →  inject required / forbidden traits + generation tokens for t
   ▼
 CharacterProfile spec  →  master prompt / panel specs
   ▼
-render (swappable — see §9)
+render (swappable — see §10)
 ```
 
 **Recognizer logic** is deterministic rule-matching, not vector search:
@@ -225,7 +225,7 @@ lets the user violate an established race's defining anatomy — that is a hard 
 
 **Mods / overrides.** Hair, outfit, and color are the *universal styling layer* and are never gated by race rules, so
 a MOD hairstyle always survives. `CompatibilityMode` no longer decides *whether* anatomy is enforced (it always is);
-at most it tunes conditional / minor traits or stylization intensity — see §11.
+at most it tunes conditional / minor traits or stylization intensity — see §12.
 
 ## 8. Mapping: card section → schema field → source
 
@@ -239,7 +239,45 @@ at most it tunes conditional / minor traits or stylization intensity — see §1
 | Expressions / poses / view / product | `PanelRequest` + `configs/presets/` | User selects |
 | Color palette | `palette` | `extract_palette` (implemented) |
 
-## 9. The renderer is swappable; the spec is the deliverable
+## 9. Spec compilation (mechanism 1 in detail)
+
+The compiler turns the recognized facts plus the user's `CharacterProfile` into a generation spec, keeping the two
+channels (§2) separate.
+
+**Inputs:** the user's `CharacterProfile` (content) + the recognized race's anatomy rules
+(`required` / `forbidden` / `generation_tokens`) + the product / style preset.
+
+**Output — a `GenerationSpec`** (extends today's [`PromptPlan`](../src/domain/models.py)): `positive_prompt`,
+`negative_prompt`, `constraints: {required, forbidden}` (the checklist the validation loop reuses — §2, mechanism 3),
+and renderer params (IP-Adapter reference, panel / style).
+
+**Two channels, assembled as separate blocks (never woven together):**
+
+```text
+positive =  [style / quality]   preset
+          + [lore · required]   ← guardrail   race required + generation_tokens.positive ("horns, facial scales, scaled tail")
+          + [user core]         ← content     confirmed visual features, outfit, hair (incl. mods), accessories
+          + [flavor]                          lower-priority extras
+
+negative =  [lore · forbidden]  ← guardrail   race forbidden ("human ears, cat ears, elf ears")
+          + [standard negatives]              text, watermark, extra limbs …
+```
+
+The lore blocks are *appended as distinct segments*, not merged into the user's description, so the channels stay
+independently traceable. There is **no override branch** for the forbidden block — race anatomy is a hard invariant (§2).
+
+**CLIP-budget priority changes.** `fit_prompt_to_clip` keeps leading fragments and drops the tail, so the keep-order
+must be **style → lore-required (the floor, must survive) → user core → [budget line] → flavor (dropped first)**.
+Lore-required tokens are short and high-value (dropping one forces a repair), so they sit *ahead* of user content;
+only flavor is sacrificed under pressure. In practice prompts are usually under budget, so this rarely bites — and the
+validation loop backstops it regardless.
+
+**In code:** upgrade [`src/prompting/compiler.py`](../src/prompting/compiler.py) `compile_prompt` to take the
+recognized anatomy rules as a second input and emit the `GenerationSpec`. The current `build_prompt` in
+[`scripts/run_baseline_experiment.py`](../scripts/run_baseline_experiment.py) is the content-channel-only precursor; it
+folds into the content block.
+
+## 10. The renderer is swappable; the spec is the deliverable
 
 The durable output of this system is the **profile spec** (a populated `CharacterProfile` plus a compiled master
 prompt). It can drive either:
@@ -253,7 +291,7 @@ prompt). It can drive either:
 The knowledge DB + spec is where this project's unique, maintainer-owned value lives. The renderer is a commodity
 that keeps improving; do not couple the spec to one renderer.
 
-## 10. Current state vs to-build
+## 11. Current state vs to-build
 
 **Implemented today:**
 
@@ -278,7 +316,7 @@ that keeps improving; do not couple the spec to one renderer.
 7. **Data-authoring mode** (image/prose → VLM draft → confirm → write record) so the knowledge base is maintainable
    without hand-writing YAML (§5.3).
 
-## 11. Open decisions
+## 12. Open decisions
 
 - File organization of race signatures (new file vs. a block inside anatomy profiles).
 - Scope of job/weapon recognition for the first version (weapon-shape signatures, or defer to user selection).
