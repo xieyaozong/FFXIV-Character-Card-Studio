@@ -94,7 +94,24 @@ class ScreenshotSummary(BaseModel):
     palette: list[str]
 
 
+class RaceTraits(BaseModel):
+    """Discriminating anatomical traits the recognizer matches against race signatures.
+
+    Each field carries one of its allowed values, or "occluded" when the part is hidden
+    (horns under a hat, a tail out of frame, a back-facing shot). The VLM reports what it
+    sees; it never names the race. Allowed values are listed beside each field.
+    """
+
+    ear_type: str = "occluded"   # human | long_pointed | feline | rabbit_long | leonine | occluded
+    horns: str = "occluded"      # present | absent | occluded
+    scales: str = "occluded"     # face | body | absent | occluded
+    tail_type: str = "occluded"  # scaled | feline_furred | none | occluded
+    stature: str = "occluded"    # child_short | average | large_tall | occluded
+    face_type: str = "occluded"  # human | feline_muzzle | occluded
+
+
 class VLMFeatureResponse(BaseModel):
+    traits: RaceTraits = Field(default_factory=RaceTraits)
     identity: list[FeatureCandidate] = Field(default_factory=list)
     outfit: list[FeatureCandidate] = Field(default_factory=list)
     job: OptionalEntity = Field(default_factory=OptionalEntity)

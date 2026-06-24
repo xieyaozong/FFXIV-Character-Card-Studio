@@ -78,3 +78,10 @@ Newest entries first. Each entry follows the same shape:
 **Changed:** added the guardrail-vs-driver guiding principle (§2); race anatomy as a hard invariant with three enforcement points (UI / compiler / validator); per-layer evidence priority; §9 spec compilation (two channels assembled as separate blocks, lore-floor CLIP-budget priority, `constraints` output); §11 validation & repair loop (VLM checks the output against the constraint checklist, region-targeted face inpaint repair).
 **Tech:** —
 **Impact:** all three clamp mechanisms (channels / invariant / validation) now have written detail; the design is ready to implement from the §12 to-build list, starting with discriminating-trait VLM extraction.
+
+### Implementation: discriminating-trait VLM extraction (first brick)
+
+**Done:** Implemented the perception layer's discriminating-trait extraction (knowledge-layer §12, item 1).
+**Changed:** added `RaceTraits` (ear_type / horns / scales / tail_type / stature / face_type, default `occluded`) + a `traits` field on `VLMFeatureResponse` (`models.py`); rewrote `FEATURE_EXTRACTION_PROMPT` to emit the traits block with allowed values plus careful-inspection / occluded-bias guidance (`prompts.py`); added parse tests (`test_models.py`).
+**Tech:** Qwen3-VL, pydantic.
+**Impact:** validated on a real Au Ra screenshot — the decisive trait (`horns=present`) is detected and outfit/weapon stay rich. The VLM mis-typed the tail (`feline_furred` vs `scaled`) and missed subtle facial scales; these are deliberately left for the recognizer to correct from race context, confirming the perception/recognition split. A first prompt version that under-detected horns showed why the forced-choice format needs explicit "look carefully / prefer occluded" guidance.
