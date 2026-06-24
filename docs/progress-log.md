@@ -85,3 +85,10 @@ Newest entries first. Each entry follows the same shape:
 **Changed:** added `RaceTraits` (ear_type / horns / scales / tail_type / stature / face_type, default `occluded`) + a `traits` field on `VLMFeatureResponse` (`models.py`); rewrote `FEATURE_EXTRACTION_PROMPT` to emit the traits block with allowed values plus careful-inspection / occluded-bias guidance (`prompts.py`); added parse tests (`test_models.py`).
 **Tech:** Qwen3-VL, pydantic.
 **Impact:** validated on a real Au Ra screenshot — the decisive trait (`horns=present`) is detected and outfit/weapon stay rich. The VLM mis-typed the tail (`feline_furred` vs `scaled`) and missed subtle facial scales; these are deliberately left for the recognizer to correct from race context, confirming the perception/recognition split. A first prompt version that under-detected horns showed why the forced-choice format needs explicit "look carefully / prefer occluded" guidance.
+
+### Implementation: race recognizer (second brick)
+
+**Done:** Implemented the recognition layer — traits → race + correction (knowledge-layer §12, item 2).
+**Changed:** new `src/catalog/race_recognizer.py` (`RaceSignature`, `load_race_signatures`, `recognize_race` weighted decisive/eliminate matcher, `apply_canonical_traits` correction); `race_signatures.example.yaml` template with the real file git-ignored; tests in `test_race_recognizer.py`.
+**Tech:** pydantic, deterministic scoring.
+**Impact:** closes the perception → recognition loop. On the Au Ra case the recognizer picks the race from the decisive `horns=present` even though the VLM mis-typed the tail (furred) and missed scales, then locks those race-defining traits back to canonical (scaled tail, facial scales) — proving the VLM need not be perfect; the knowledge layer corrects from race context.

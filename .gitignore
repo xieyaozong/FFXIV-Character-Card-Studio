@@ -30,6 +30,7 @@ outputs/*
 # Only the *.example.yaml templates and the format docs are published.
 content_packs/ffxiv/anatomy_rules.yaml
 content_packs/ffxiv/entities.yaml
+content_packs/ffxiv/race_signatures.yaml
 content_packs/ffxiv/lore/
 content_packs/ffxiv/reference/
 *.safetensors

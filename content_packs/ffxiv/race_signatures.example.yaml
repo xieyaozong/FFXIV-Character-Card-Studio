@@ -1,0 +1,15 @@
+# Example race signatures — the FORMAT only.
+# Copy this file to `race_signatures.yaml` and fill it with your own curated races.
+# Your real `race_signatures.yaml` is git-ignored: your knowledge is yours, like model weights.
+#
+# Each race lists the race-defining traits (canonical values) the recognizer matches against the
+# VLM's RaceTraits, and which of them are `decisive` (weighted highest, and able to eliminate a
+# race when an observed value contradicts them). Trait names and values use the RaceTraits
+# vocabulary: ear_type / horns / scales / tail_type / stature / face_type.
+races:
+  example_race:
+    names: { ja-JP: "", zh-TW: "", en-US: "Example Race" }
+    signature:
+      horns: present        # a race-defining trait and its canonical value
+      tail_type: scaled
+    decisive: [horns]       # decisive traits get high weight and can eliminate on contradiction

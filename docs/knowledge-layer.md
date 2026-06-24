@@ -328,29 +328,29 @@ this loop; a `ValidationResult` model can carry the comparison.
 **Implemented today:**
 
 - Preprocessing: triage, subject crop, background removal ([`src/preprocessing/`](../src/preprocessing/)).
-- VLM perception (freeform feature JSON) — [`src/vlm/`](../src/vlm/).
-- Visual-only prompt building (`build_prompt` in
-  [`scripts/run_baseline_experiment.py`](../scripts/run_baseline_experiment.py)); **does not use anatomy rules yet.**
+- VLM perception with **discriminating-trait extraction** (`RaceTraits` + a traits-aware prompt) —
+  [`src/vlm/`](../src/vlm/), [`src/domain/models.py`](../src/domain/models.py).
+- **Race recognizer** (traits → race + canonical-trait correction) —
+  [`src/catalog/race_recognizer.py`](../src/catalog/race_recognizer.py); signatures are private `race_signatures.yaml`
+  with a public `.example` template.
+- Visual-only prompt building (`build_prompt`); **does not use anatomy rules yet.**
 - Schemas, enums, compatibility modes ([`src/domain/models.py`](../src/domain/models.py)).
-- Entity catalog + content-pack scaffolding; `anatomy_rules.yaml` has one race.
+- Entity catalog + content-pack scaffolding (private data + `.example` templates).
 - Experimental SDXL / IP-Adapter generation (WIP, not part of the milestone).
 
 **To build (in rough order):**
 
-1. **Discriminating-trait VLM extraction** — rewrite [`FEATURE_EXTRACTION_PROMPT`](../src/vlm/prompts.py) to elicit
-   the §6 traits. *(This is the planned next concrete step.)*
-2. **Race signatures** for all eight races + the recognizer that matches traits → race/clan.
-3. **Wire anatomy rules into the spec** (required/forbidden traits + generation tokens) — the missing link in both
-   `build_prompt` and [`src/prompting/compiler.py`](../src/prompting/compiler.py).
-4. **Personality input layer** (UI form populating `personality` / `likes` / `dislikes` / `quote`).
-5. **Confidence + one-tap confirmation UX**.
-6. **Spec → renderer** adapter(s) for Path A and/or Path B.
-7. **Data-authoring mode** (image/prose → VLM draft → confirm → write record) so the knowledge base is maintainable
+1. **Wire anatomy rules into the spec** (required/forbidden traits + generation tokens) — the missing link in both
+   `build_prompt` and [`src/prompting/compiler.py`](../src/prompting/compiler.py). This is §9 (spec compilation).
+2. **Clan + job/weapon recognition** — extend the recognizer beyond race.
+3. **Personality input layer** (UI form populating `personality` / `likes` / `dislikes` / `quote`).
+4. **Confidence + one-tap confirmation UX**.
+5. **Spec → renderer** adapter(s) for Path A and/or Path B.
+6. **Data-authoring mode** (image/prose → VLM draft → confirm → write record) so the knowledge base is maintainable
    without hand-writing YAML (§5.3).
 
 ## 13. Open decisions
 
-- File organization of race signatures (new file vs. a block inside anatomy profiles).
 - Scope of job/weapon recognition for the first version (weapon-shape signatures, or defer to user selection).
 - RAG timing and shape: its role is settled (it indexes lore prose — lore's own source of truth — and resolves fuzzy
   gear/NPC names to structured IDs), but *when* to build it and how to chunk/enrich is open. Hard race/anatomy never
