@@ -474,7 +474,8 @@ def main() -> None:
                 use_safetensors=True,
                 local_files_only=True,
             )
-        except (OSError, ValueError):
+        except Exception:
+            # Models without an fp16 variant (e.g. xinsir canny) load from the plain weights.
             controlnet = ControlNetModel.from_pretrained(
                 str(args.controlnet_model.resolve()),
                 torch_dtype=torch.float16,
