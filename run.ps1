@@ -27,9 +27,9 @@ $SdxlModel = "models\diffusion\illustrious-xl-v0.1\Illustrious-XL-v0.1.safetenso
 
 # ── LoRA（可加多個，格式: "路徑=權重"）──────────────────────
 # Illustrious 系 LoRA 只能配 Illustrious base，勿與 SDXL Base 混用
+# 註: 種族解剖 LoRA（au-ra 角/鱗）已由 $AutoAssets 依辨識自動載入，這裡只放風格 LoRA
 $Loras = @(
     "models\loras\illustrious\style\keyframe-animation-v1.1.safetensors=0.65"   # style
-    "models\loras\illustrious\ffxiv\au-ra-raen-facetype3-v2.safetensors=0.75"   # anatomy（角/鱗）
 )
 
 # ── 生成參數 ────────────────────────────────────────────────
@@ -72,6 +72,10 @@ $BackgroundBackend = "rembg"
 $CropSubject = $true            # true/false
 $CropBackend = "rembg"          # "rembg" | "blue_screen"
 $CropPad     = 0.08             # 裁切框外擴比例
+
+# ── 辨識自動載入資產（認出種族就自動帶入該種族的 LoRA/參考圖）─
+# 由 content_packs 的 anatomy_rules.yaml 內 assets 區塊定義；零 prompt 的核心
+$AutoAssets = $true             # true/false
 
 # ============================================================
 # 以下不需要修改
@@ -116,6 +120,8 @@ if ($CropSubject) {
 } else {
     $args_list += "--no-crop-subject"
 }
+
+if ($AutoAssets) { $args_list += "--auto-assets" } else { $args_list += "--no-auto-assets" }
 
 if ($FeaturesFile -ne "") {
     $args_list += "--features-file", $FeaturesFile

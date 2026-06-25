@@ -77,9 +77,16 @@ assets, and ControlNet lifts the screenshot's own geometry to a finished card.
 - [ ] **ControlNet structure (runtime, next)** — add `StableDiffusionXLControlNetImg2ImgPipeline`
   driven by a control map (canny/lineart for horn/hair edges; depth for body) extracted from the
   user's screenshot.
-- [ ] **Stronger single-image identity** — evaluate PuLID / InstantID over IP-Adapter plus-face.
-- [ ] **DB canonical references** — load race/gear reference images by recognition to backstop a
-  poor-angle screenshot.
+- [x] **Recognition-driven asset loading** — the recognized race auto-loads its curated LoRA(s)
+  and optional reference image from the content pack (`assets` block in `anatomy_rules.yaml`), so
+  the user no longer hand-wires LoRAs. This is the zero-prompt loop made real.
+- [ ] **Stronger single-image identity** — *not* InstantID/PuLID: those are insightface-based
+  realistic-face methods that fight an anime base. IP-Adapter plus-face stays the anime-appropriate
+  tool; revisit only if a face still drifts.
+- [ ] **Gear/glamour references** — extend recognition + the `assets` block to gear sets so the DB
+  can backstop appearance from a poor-angle screenshot.
+- [ ] **OCR facts** — PaddleOCR on the Adventurer Plate / gear view for deterministic name/gear
+  facts (parallel recognition-layer increment).
 
 ## Brick 1 — dataset prep (done)
 

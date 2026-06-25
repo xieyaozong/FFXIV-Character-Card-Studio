@@ -14,6 +14,24 @@ Newest entries first. Each entry follows the same shape:
 
 ---
 
+## 2026-06-25 — Recognition-driven asset loading (zero-prompt loop)
+
+**Done:** Closed the recognition → generation loop: once the race is recognized, the runner
+auto-loads that race's curated LoRA(s) and optional reference image from the content pack, so the
+user no longer hand-wires LoRAs in `run.ps1`. Also ruled out InstantID/PuLID as the identity
+upgrade — they are insightface realistic-face methods that degrade an anime base; IP-Adapter
+plus-face stays the anime-appropriate tool.
+**Changed:** new `src/catalog/asset_resolver.py` (`resolve_race_assets`); runner reads the
+recognized race's `assets` block, merges its LoRAs into the load list (dedup by path) and uses its
+reference image as the IP-Adapter default; new `--auto-assets` flag; `anatomy_rules.example.yaml`
+documents the `assets` schema; the private `anatomy_rules.yaml` gains the Au Ra LoRA; `run.ps1`
+drops the manual race LoRA (now auto-loaded) and exposes `$AutoAssets`; tests in
+`test_asset_resolver.py` (27 pass).
+**Tech:** reuses `anatomy_profile_for` (prefix match); deterministic, no new model downloads.
+**Impact:** the knowledge DB now drives generation — recognize the screenshot's race and the right
+anatomy LoRA appears automatically. This is the product's zero-prompt premise made concrete and the
+hook for gear/glamour references next.
+
 ## 2026-06-25 — Training-free fidelity: ControlNet structural conditioning
 
 **Done:** Course-corrected the fidelity plan to the product premise (one screenshot in, **zero

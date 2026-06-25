@@ -26,3 +26,7 @@ profiles:
         - <your-positive-token>
       negative:
         - <your-negative-token>
+    assets:                             # optional: auto-loaded when this race is recognized
+      loras:                            # "path=weight"; race anatomy LoRA(s) for this race
+        - models/loras/<your-race-anatomy-lora>.safetensors=0.75
+      ip_adapter_image: <path-to-canonical-reference.png>   # optional identity reference

@@ -106,6 +106,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--race-signatures", type=Path, default=Path("content_packs/ffxiv/race_signatures.yaml"))
     parser.add_argument("--anatomy-rules", type=Path, default=Path("content_packs/ffxiv/anatomy_rules.yaml"))
     parser.add_argument(
+        "--auto-assets",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Auto-load the recognized race's curated LoRA(s) and reference image from the content pack.",
+    )
+    parser.add_argument(
         "--face-detail",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -362,6 +368,7 @@ def main() -> None:
 
     negative_prompt = ", ".join(part for part in (NEGATIVE_PROMPT, args.extra_negative) if part)
     race_id: str | None = None
+    auto_ip_adapter_image: Path | None = None
     guardrails_on = (
         args.guardrails
         and not args.prompt_override.strip()
@@ -377,13 +384,14 @@ def main() -> None:
         from src.domain.models import RaceTraits
         from src.prompting.spec import compile_generation_spec
 
+        anatomy_rules_data = yaml.safe_load(args.anatomy_rules.read_text(encoding="utf-8")) or {}
         spec = compile_generation_spec(
             content_terms=content_terms(features),
             style_prompt=STYLE_PROMPT,
             base_negative=negative_prompt,
             traits=RaceTraits.model_validate(features.get("traits", {})),
             race_signatures=load_race_signatures(args.race_signatures),
-            anatomy_rules=yaml.safe_load(args.anatomy_rules.read_text(encoding="utf-8")) or {},
+            anatomy_rules=anatomy_rules_data,
             extra_prompt=args.extra_prompt,
         )
         prompt = spec.positive_prompt
@@ -394,6 +402,21 @@ def main() -> None:
             encoding="utf-8",
         )
         print(f"recognized race: {race_id}")
+
+        # Recognition drives generation: auto-load the race's curated LoRA(s) + reference image.
+        if args.auto_assets and race_id:
+            from src.catalog.asset_resolver import resolve_race_assets
+
+            assets = resolve_race_assets(race_id, anatomy_rules_data)
+            existing = {Path(spec_str.rsplit("=", 1)[0]).resolve() for spec_str in args.lora}
+            for lora_spec in assets["loras"]:
+                if Path(lora_spec.rsplit("=", 1)[0]).resolve() not in existing:
+                    args.lora.append(lora_spec)
+                    print(f"  auto-loaded race LoRA: {lora_spec}")
+            reference = assets["ip_adapter_image"]
+            if reference and not args.ip_adapter_image and Path(reference).is_file():
+                auto_ip_adapter_image = Path(reference)
+                print(f"  auto-loaded reference image: {reference}")
     else:
         prompt = build_prompt(features, args.extra_prompt)
     (output_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
@@ -507,6 +530,8 @@ def main() -> None:
     if args.ip_adapter_scale > 0:
         if args.ip_adapter_image:
             ip_adapter_image = Image.open(args.ip_adapter_image).convert("RGB")
+        elif auto_ip_adapter_image is not None:
+            ip_adapter_image = Image.open(auto_ip_adapter_image).convert("RGB")
         else:
             ip_adapter_image = build_review_crops(composited_image)["face"]
         ip_adapter_image.save(output_dir / "ip_adapter_image.png")
