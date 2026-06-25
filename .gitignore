@@ -25,6 +25,8 @@ private_inputs/*
 !private_inputs/.gitkeep
 outputs/*
 !outputs/.gitkeep
+# Per-character LoRA datasets and trained weights — private, the maintainer's IP.
+datasets/
 
 # Curated FFXIV knowledge data — the maintainer's IP, kept private like model weights.
 # Only the *.example.yaml templates and the format docs are published.

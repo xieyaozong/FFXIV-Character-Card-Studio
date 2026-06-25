@@ -42,6 +42,15 @@ $Steps         = 24      # 24–30
 $IpAdapterScale = 0.0    # 0 = 關閉；建議 0.5–0.8。要「兩者兼顧」就開這個再把 $Strength 拉高
 $IpAdapterImage = ""     # 留空 = 自動用角色臉部裁切；可指定一張臉部參考圖
 
+# ── ControlNet（從截圖鎖住真實幾何：角/髮型/姿勢，訓練-free）──
+# 留空 = 關閉。設了路徑就會把那張截圖的結構釘住，直接修「角畫錯/髮畫錯」
+$ControlNetModel  = ""   # 例: 你下載的 canny/lineart/union ControlNet；或 "models\controlnet\depth-sdxl"（需 $DepthModel）
+$ControlNetScale  = 0.6  # 0.4–0.8；越高越貼截圖結構（太高會僵硬）
+# 前處理要對應 ControlNet 類型: "canny"(免下載,抓角/髮邊) | "depth"(需 $DepthModel) | "none"(用 $ControlImage)
+$ControlPreproc   = "canny"
+$DepthModel       = ""   # depth 前處理用的深度估計模型路徑（如 Depth-Anything）
+$ControlImage     = ""   # 直接提供算好的 control map，會蓋過前處理
+
 # ── 完成度（hi-res 放大 + 臉部細修）─────────────────────────
 $Hires           = $true   # 整張放大+輕重繪，提升解析度與完成度
 $HiresScale      = 1.5     # 放大倍率（1.5 → 768x1024 變 1152x1536）
@@ -89,6 +98,14 @@ $args_list = @(
 
 if ($IpAdapterImage -ne "") {
     $args_list += "--ip-adapter-image", $IpAdapterImage
+}
+
+if ($ControlNetModel -ne "") {
+    $args_list += "--controlnet-model", $ControlNetModel
+    $args_list += "--controlnet-scale", $ControlNetScale
+    $args_list += "--control-preprocessor", $ControlPreproc
+    if ($DepthModel   -ne "") { $args_list += "--depth-model", $DepthModel }
+    if ($ControlImage -ne "") { $args_list += "--control-image", $ControlImage }
 }
 
 if ($Hires)      { $args_list += "--hires" }      else { $args_list += "--no-hires" }

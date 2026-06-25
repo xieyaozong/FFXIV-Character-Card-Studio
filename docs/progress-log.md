@@ -14,6 +14,31 @@ Newest entries first. Each entry follows the same shape:
 
 ---
 
+## 2026-06-25 — Training-free fidelity: ControlNet structural conditioning
+
+**Done:** Course-corrected the fidelity plan to the product premise (one screenshot in, **zero
+training by the user**) and implemented the training-free fix. Researched SOTA low-prompt
+character generation and assessed OCR/Vision-RAG. Reframed `docs/character-lora.md` into two tiers
+(maintainer trains race/gear-level assets once; end users supply one screenshot) and demoted the
+per-character LoRA to an optional maintainer/showcase tool. Then wired ControlNet so the redraw
+follows the screenshot's *real* geometry (horns, hair, pose) instead of inventing it.
+**Changed:** new `src/preprocessing/control_images.py` (`canny`/`depth`/`none` control maps); the
+runner now builds a control map from the screenshot, loads a `ControlNetModel`, and uses
+`StableDiffusionXLControlNetImg2ImgPipeline`, threading the control image + conditioning scale
+through base + hi-res + face-detail (head crop of the control map); new args
+`--controlnet-model/--controlnet-scale/--control-preprocessor/--depth-model/--control-image`;
+`run.ps1` exposes the ControlNet block; `prepare_character_dataset.py` + `prepare_dataset.ps1`
+kept as the maintainer-tier dataset tool (earlier brick); `.gitignore` excludes `datasets/`.
+**Tech:** diffusers SDXL ControlNet img2img; OpenCV Canny (no extra model) for horn/hair edges;
+optional transformers depth estimator for the already-downloaded depth-sdxl ControlNet.
+**Impact:** directly attacks the "horns/hair drawn wrong, scales/sunglasses fudged" complaint
+without asking users for more images — geometry is read from their one screenshot. Canny works
+with no download once a matching canny/lineart/union SDXL ControlNet is fetched; depth reuses
+`models/controlnet/depth-sdxl` plus a depth estimator. 24 tests pass. Next: download a
+canny/lineart SDXL ControlNet and tune `$ControlNetScale`; then stronger single-image identity
+(PuLID/InstantID) and DB-loaded race/gear references. OCR (PaddleOCR for the Adventurer Plate /
+gear names) stays queued as a parallel recognition increment.
+
 ## 2026-06-23 — Preprocessing, prompt fixes, and first repo cleanup
 
 ### Screenshot triage + subject crop

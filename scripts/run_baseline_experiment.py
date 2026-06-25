@@ -113,6 +113,20 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--face-detail-strength", type=float, default=0.5)
     parser.add_argument(
+        "--controlnet-model",
+        type=Path,
+        help="ControlNet folder. Set to pin geometry (horns/hair/pose) from the screenshot.",
+    )
+    parser.add_argument("--controlnet-scale", type=float, default=0.6)
+    parser.add_argument(
+        "--control-preprocessor",
+        choices=("none", "canny", "depth"),
+        default="canny",
+        help="How to derive the control map from the screenshot. Must match the ControlNet type.",
+    )
+    parser.add_argument("--depth-model", type=Path, help="Depth estimator path (for --control-preprocessor depth).")
+    parser.add_argument("--control-image", type=Path, help="Precomputed control map (overrides the preprocessor).")
+    parser.add_argument(
         "--hires",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -222,7 +236,10 @@ def parse_lora_specs(values: list[str]) -> list[tuple[Path, float]]:
     return specs
 
 
-def hires_fix(pipeline, image, *, prompt, negative, ip_image, scale, strength, steps, guidance, generator):
+def hires_fix(
+    pipeline, image, *, prompt, negative, ip_image, control_image, control_scale,
+    scale, strength, steps, guidance, generator,
+):
     """Upscale the whole image and lightly re-render it for higher resolution and polish."""
     width, height = image.size
     target = (max(8, round(width * scale / 8) * 8), max(8, round(height * scale / 8) * 8))
@@ -237,10 +254,16 @@ def hires_fix(pipeline, image, *, prompt, negative, ip_image, scale, strength, s
     }
     if ip_image is not None:
         kwargs["ip_adapter_image"] = ip_image
+    if control_image is not None:
+        kwargs["control_image"] = control_image.resize(target, Image.Resampling.LANCZOS)
+        kwargs["controlnet_conditioning_scale"] = control_scale
     return pipeline(**kwargs).images[0]
 
 
-def detail_face(pipeline, image, *, prompt, negative, ip_image, strength, steps, guidance, generator):
+def detail_face(
+    pipeline, image, *, prompt, negative, ip_image, control_image, control_scale,
+    strength, steps, guidance, generator,
+):
     """Re-render the head region at high resolution and blend it back (mechanism 3 repair).
 
     The face is tiny in a full-body frame, so the base model cannot render it and race anatomy
@@ -263,6 +286,11 @@ def detail_face(pipeline, image, *, prompt, negative, ip_image, strength, steps,
     }
     if ip_image is not None:
         kwargs["ip_adapter_image"] = ip_image
+    if control_image is not None:
+        # Crop the control map to the same head box so the redraw keeps the horn/hair geometry.
+        head_control = control_image.resize(image.size, Image.Resampling.LANCZOS).crop(box)
+        kwargs["control_image"] = head_control.resize(target, Image.Resampling.LANCZOS)
+        kwargs["controlnet_conditioning_scale"] = control_scale
     detailed = pipeline(**kwargs).images[0].resize(crop.size, Image.Resampling.LANCZOS)
 
     mask = Image.new("L", crop.size, 0)
@@ -381,7 +409,6 @@ def main() -> None:
         return
 
     import torch
-    from diffusers import StableDiffusionXLImg2ImgPipeline
 
     torch.cuda.empty_cache()
     # Pad (letterbox), not fit/crop: a tight subject crop is tall, and fit would cut off head and feet.
@@ -394,23 +421,68 @@ def main() -> None:
     )
     input_image.save(output_dir / "input_character.png")
 
+    # ControlNet: pin the screenshot's real geometry (horns, hair, pose) so the redraw follows it.
+    control_image = None
+    if args.controlnet_model:
+        if args.control_image:
+            control_image = Image.open(args.control_image).convert("RGB")
+        else:
+            from src.preprocessing.control_images import build_control_image
+
+            control_image = build_control_image(
+                input_image,
+                args.control_preprocessor,
+                depth_model=args.depth_model,
+                device="cuda",
+            )
+        control_image = control_image.resize(input_image.size, Image.Resampling.LANCZOS)
+        control_image.save(output_dir / "control_image.png")
+
     generation_started = perf_counter()
     model_path = args.sdxl_model.resolve()
+    if args.controlnet_model:
+        from diffusers import ControlNetModel, StableDiffusionXLControlNetImg2ImgPipeline
+
+        try:
+            controlnet = ControlNetModel.from_pretrained(
+                str(args.controlnet_model.resolve()),
+                torch_dtype=torch.float16,
+                variant="fp16",
+                use_safetensors=True,
+                local_files_only=True,
+            )
+        except (OSError, ValueError):
+            controlnet = ControlNetModel.from_pretrained(
+                str(args.controlnet_model.resolve()),
+                torch_dtype=torch.float16,
+                use_safetensors=True,
+                local_files_only=True,
+            )
+        pipeline_cls = StableDiffusionXLControlNetImg2ImgPipeline
+        extra_kwargs = {"controlnet": controlnet}
+    else:
+        from diffusers import StableDiffusionXLImg2ImgPipeline
+
+        pipeline_cls = StableDiffusionXLImg2ImgPipeline
+        extra_kwargs = {}
+
     if model_path.is_file():
-        pipeline = StableDiffusionXLImg2ImgPipeline.from_single_file(
+        pipeline = pipeline_cls.from_single_file(
             str(model_path),
             config=str(args.pipeline_config.resolve()),
             torch_dtype=torch.float16,
             use_safetensors=True,
             local_files_only=True,
+            **extra_kwargs,
         )
     else:
-        pipeline = StableDiffusionXLImg2ImgPipeline.from_pretrained(
+        pipeline = pipeline_cls.from_pretrained(
             str(model_path),
             torch_dtype=torch.float16,
             variant="fp16",
             use_safetensors=True,
             local_files_only=True,
+            **extra_kwargs,
         )
 
     lora_specs = parse_lora_specs(args.lora)
@@ -474,6 +546,9 @@ def main() -> None:
     }
     if ip_adapter_image is not None:
         generation_kwargs["ip_adapter_image"] = ip_adapter_image
+    if control_image is not None:
+        generation_kwargs["control_image"] = control_image
+        generation_kwargs["controlnet_conditioning_scale"] = args.controlnet_scale
     output_image = pipeline(**generation_kwargs).images[0]
     output_image.save(output_dir / "result_base.png")
     if args.hires:
@@ -483,6 +558,8 @@ def main() -> None:
             prompt=prompt_used,
             negative=negative_used,
             ip_image=ip_adapter_image,
+            control_image=control_image,
+            control_scale=args.controlnet_scale,
             scale=args.hires_scale,
             strength=args.hires_strength,
             steps=args.steps,
@@ -497,6 +574,8 @@ def main() -> None:
             prompt=face_prompt,
             negative=negative_used,
             ip_image=ip_adapter_image,
+            control_image=control_image,
+            control_scale=args.controlnet_scale,
             strength=args.face_detail_strength,
             steps=args.steps,
             guidance=args.guidance_scale,
@@ -522,6 +601,9 @@ def main() -> None:
         "background_backend": args.background_backend,
         "ip_adapter_scale": args.ip_adapter_scale,
         "ip_adapter_weight": args.ip_adapter_weight if args.ip_adapter_scale > 0 else None,
+        "controlnet_model": str(args.controlnet_model.resolve()) if args.controlnet_model else None,
+        "controlnet_scale": args.controlnet_scale if args.controlnet_model else None,
+        "control_preprocessor": args.control_preprocessor if args.controlnet_model else None,
         "crop_subject": args.crop_subject,
         "crop": crop_info,
         "guidance_scale": args.guidance_scale,
