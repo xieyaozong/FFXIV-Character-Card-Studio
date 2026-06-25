@@ -14,6 +14,19 @@ Newest entries first. Each entry follows the same shape:
 
 ---
 
+## 2026-06-25 — Repo hygiene: `.ps1` runners are local-only
+
+**Done:** Stopped publishing PowerShell runners — they are personal param wrappers, not product
+flow. The real flow is the Python CLIs in `scripts/`; setup (model downloads) belongs in docs.
+**Changed:** `git rm --cached run.ps1 triage.ps1 prepare_dataset.ps1` (kept locally); `.gitignore`
+ignores `*.ps1`; README and AGENTS now show `python scripts/...` commands; `docs/model_downloads.md`
+gained a ControlNet section (canny + depth download commands); `docs/character-lora.md` references
+the CLI instead of `$Loras`/`prepare_dataset.ps1`; deleted the throwaway `download_controlnet.ps1`
+(its content moved into the docs).
+**Tech:** —
+**Impact:** the public repo is framework + documented CLIs only, no scattered local scripts. If a
+step becomes real flow it gets integrated into the code or docs, not committed as a loose `.ps1`.
+
 ## 2026-06-25 — Recognition-driven asset loading (zero-prompt loop)
 
 **Done:** Closed the recognition → generation loop: once the race is recognized, the runner

@@ -35,11 +35,13 @@ Lore is the floor (prevent broken anatomy such as a Miqo'te with human ears); **
 
 ## Never commit
 
-Private screenshots (`character/`, `private_inputs/`), model weights and LoRAs (`models/`), generated output (`outputs/`), and local env (`.env`). See [.gitignore](.gitignore).
+Private screenshots (`character/`, `private_inputs/`), model weights and LoRAs (`models/`),
+generated output (`outputs/`), datasets (`datasets/`), local env (`.env`), and local `*.ps1`
+runners (personal param wrappers — the real flow lives in `scripts/`). See [.gitignore](.gitignore).
 
 ## Run
 
-- Triage screenshots: `./triage.ps1` (or `scripts/triage_screenshots.py`).
-- Screenshots → prompt: `./run.ps1` with `$FeaturesOnly = $true` (or `scripts/run_baseline_experiment.py --features-only`).
+- Triage screenshots: `python scripts/triage_screenshots.py`.
+- Screenshots → prompt: `python scripts/run_baseline_experiment.py --features-only`.
 
 The GPU stack (torch + transformers + diffusers) installs separately — see [docs/gpu_and_models.md](docs/gpu_and_models.md).

@@ -49,6 +49,29 @@ Civitai currently requires an authenticated download. Set `CIVITAI_API_TOKEN` in
 files while signed in through a browser. A file around 80 KB beginning with `<!DOCTYPE html>` is the login page, not a
 LoRA. The expected Keyframe and Character Sheet files are about 228 MB and 456 MB respectively.
 
+## ControlNet (structural conditioning)
+
+ControlNet pins the character's real geometry (horns, hair, pose) from the user's screenshot, so
+the redraw follows the real shapes instead of inventing them. Pick a model that matches the
+`--control-preprocessor`:
+
+| Preprocessor | Model | Size | Local path |
+| --- | --- | ---: | --- |
+| `canny` (default, no extra model) | [xinsir/controlnet-canny-sdxl-1.0](https://huggingface.co/xinsir/controlnet-canny-sdxl-1.0) | ~2.5 GB | `models/controlnet/canny-sdxl/` |
+| `depth` (needs a depth estimator) | depth ControlNet (`models/controlnet/depth-sdxl/`) + [Depth-Anything-V2-Small](https://huggingface.co/depth-anything/Depth-Anything-V2-Small-hf) | ~100 MB | `models/depth/depth-anything-v2-small/` |
+
+```powershell
+# canny (recommended — best on horn/hair edges; OpenCV does the preprocessing, no extra model)
+.\.venv\Scripts\hf.exe download xinsir/controlnet-canny-sdxl-1.0 --local-dir models\controlnet\canny-sdxl
+
+# depth (reuses the already-present depth-sdxl ControlNet; needs an estimator)
+.\.venv\Scripts\hf.exe download depth-anything/Depth-Anything-V2-Small-hf --local-dir models\depth\depth-anything-v2-small
+```
+
+Then run with `--controlnet-model models\controlnet\canny-sdxl --control-preprocessor canny`
+(start `--controlnet-scale 0.6`; raise to 0.7–0.8 if horns still drift). The loader tries the
+`fp16` variant first and falls back to the full-precision weights.
+
 ## Trigger Words
 
 | LoRA | Initial test weight | Trigger words |

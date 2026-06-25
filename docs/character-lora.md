@@ -51,7 +51,7 @@ premise. It is the next implementation brick (below).
 
 ## Maintainer/showcase tier: per-character LoRA (optional)
 
-`scripts/prepare_character_dataset.py` + `prepare_dataset.ps1` build a per-character LoRA dataset.
+`scripts/prepare_character_dataset.py` builds a per-character LoRA dataset.
 This is **not** the product path — it is an optional tool for the *maintainer* to make a
 high-fidelity showcase LoRA of their own hero character (where they already own a clean reference
 set). The runtime path above must work without it.
@@ -74,9 +74,9 @@ assets, and ControlNet lifts the screenshot's own geometry to a finished card.
 
 - [x] **Dataset prep (maintainer tier)** — `scripts/prepare_character_dataset.py`. Kept as an
   optional showcase tool, not the product path.
-- [ ] **ControlNet structure (runtime, next)** — add `StableDiffusionXLControlNetImg2ImgPipeline`
-  driven by a control map (canny/lineart for horn/hair edges; depth for body) extracted from the
-  user's screenshot.
+- [x] **ControlNet structure (runtime)** — `StableDiffusionXLControlNetImg2ImgPipeline` driven by
+  a control map (canny/lineart for horn/hair edges; depth for body) extracted from the user's
+  screenshot. See `src/preprocessing/control_images.py`.
 - [x] **Recognition-driven asset loading** — the recognized race auto-loads its curated LoRA(s)
   and optional reference image from the content pack (`assets` block in `anatomy_rules.yaml`), so
   the user no longer hand-wires LoRAs. This is the zero-prompt loop made real.
@@ -125,16 +125,16 @@ The generated `train_config.toml` is pre-tuned for a character LoRA on Illustrio
 dataset size; checkpoints land in `datasets/<character>/lora/`. Pick the epoch that reproduces the
 character without over-baking the pose.
 
-## Brick 3 — generate (next implementation brick)
+## Generate with a showcase LoRA (maintainer)
 
-Add the trained LoRA to the `$Loras` list in `run.ps1`:
+Pass the trained LoRA to the generator alongside the style LoRA, and lean on the trigger word
+instead of a token dump:
 
 ```powershell
-$Loras = @(
-    "models\loras\illustrious\style\keyframe-animation-v1.1.safetensors=0.6"
-    "datasets\<character>\lora\<trigger>-illustrious-v1.safetensors=0.85"
-)
-$ExtraPrompt = "<trigger>"   # appearance now comes from the LoRA, not a token dump
+python scripts/run_baseline_experiment.py `
+  --lora "models\loras\illustrious\style\keyframe-animation-v1.1.safetensors=0.6" `
+  --lora "datasets\<character>\lora\<trigger>-illustrious-v1.safetensors=0.85" `
+  --extra-prompt "<trigger>"  # appearance comes from the LoRA, not a token dump
 ```
 
 Expect to *lower* the content-term prompt weight and lean on the trigger. The race guardrail

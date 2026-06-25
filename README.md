@@ -68,21 +68,13 @@ The default VLM is `Qwen/Qwen3-VL-4B-Instruct` (Apache-2.0). Weights are downloa
 
 ## Running the milestone
 
-Two PowerShell entry points keep all tunables at the top of one file, so a run is a single edit.
-
 **1. Triage** — score a folder of screenshots and crop the usable ones:
 
 ```powershell
-.\triage.ps1     # edit $InputDir / thresholds, then run; review crops under outputs/triage/
+python scripts/triage_screenshots.py --input-dir "path\to\screenshots" --output-dir "outputs\triage"
 ```
 
 **2. Screenshots → prompt** — extract features and build the prompt (no image generation):
-
-```powershell
-.\run.ps1        # set $FeaturesOnly = $true to stop after features.json + prompt.txt
-```
-
-Both wrap CLIs you can also call directly:
 
 ```powershell
 python scripts/run_baseline_experiment.py `

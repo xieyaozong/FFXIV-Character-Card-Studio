@@ -11,6 +11,10 @@ venv/
 # Claude Code tooling config (personal, machine-specific)
 .claude/
 
+# Local PowerShell runners — personal param wrappers, not product flow.
+# The real flow lives in scripts/ (Python CLIs); see docs/ for commands.
+*.ps1
+
 # Model weights, LoRAs, and conditioning checkpoints (downloaded locally, never published)
 models/*
 !models/README.md
