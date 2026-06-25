@@ -83,8 +83,11 @@ assets, and ControlNet lifts the screenshot's own geometry to a finished card.
 - [ ] **Stronger single-image identity** — *not* InstantID/PuLID: those are insightface-based
   realistic-face methods that fight an anime base. IP-Adapter plus-face stays the anime-appropriate
   tool; revisit only if a face still drifts.
-- [ ] **Gear/glamour references** — extend recognition + the `assets` block to gear sets so the DB
-  can backstop appearance from a poor-angle screenshot.
+- [x] **Gear/glamour recognition** — `src/catalog/gear_recognizer.py` matches the outfit text to a
+  curated equipment entity and injects its verified `visual_prompt`/`negative_prompt`, so the DB
+  backstops the look (token-level). Image injection of `reference_image` is the follow-up below.
+- [ ] **Gear reference-image injection** — needs a general (non-face) IP-Adapter download + dual
+  IP-Adapter wiring (face from the screenshot, appearance from the DB reference image).
 - [ ] **OCR facts** — PaddleOCR on the Adventurer Plate / gear view for deterministic name/gear
   facts (parallel recognition-layer increment).
 

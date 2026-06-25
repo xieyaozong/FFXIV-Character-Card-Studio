@@ -105,6 +105,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--race-signatures", type=Path, default=Path("content_packs/ffxiv/race_signatures.yaml"))
     parser.add_argument("--anatomy-rules", type=Path, default=Path("content_packs/ffxiv/anatomy_rules.yaml"))
+    parser.add_argument("--entities", type=Path, default=Path("content_packs/ffxiv/entities.yaml"))
     parser.add_argument(
         "--auto-assets",
         action=argparse.BooleanOptionalAction,
@@ -368,7 +369,28 @@ def main() -> None:
 
     negative_prompt = ", ".join(part for part in (NEGATIVE_PROMPT, args.extra_negative) if part)
     race_id: str | None = None
+    gear_id: str | None = None
+    gear_reference: str | None = None
     auto_ip_adapter_image: Path | None = None
+
+    # Gear recognition: match the outfit to a curated equipment set and inject its verified
+    # appearance tokens, so the DB backstops the look instead of the user prompting it.
+    terms = content_terms(features)
+    if not args.prompt_override.strip() and args.entities.is_file():
+        from src.catalog.entity_catalog import EntityCatalog
+        from src.catalog.gear_recognizer import recognize_gear
+
+        gear_match = recognize_gear(terms, EntityCatalog.load(args.entities))
+        if gear_match:
+            gear = gear_match.record
+            gear_id = gear.canonical_id
+            gear_reference = gear.reference_image or None
+            if gear.visual_prompt:
+                terms = [gear.visual_prompt, *terms]
+            if gear.negative_prompt:
+                negative_prompt = ", ".join(part for part in (negative_prompt, *gear.negative_prompt) if part)
+            print(f"recognized gear: {gear_id} (matched: {', '.join(gear_match.matched)})")
+
     guardrails_on = (
         args.guardrails
         and not args.prompt_override.strip()
@@ -386,7 +408,7 @@ def main() -> None:
 
         anatomy_rules_data = yaml.safe_load(args.anatomy_rules.read_text(encoding="utf-8")) or {}
         spec = compile_generation_spec(
-            content_terms=content_terms(features),
+            content_terms=terms,
             style_prompt=STYLE_PROMPT,
             base_negative=negative_prompt,
             traits=RaceTraits.model_validate(features.get("traits", {})),
@@ -398,7 +420,11 @@ def main() -> None:
         negative_prompt = spec.negative_prompt
         race_id = spec.race_id
         (output_dir / "constraints.json").write_text(
-            json.dumps({"race_id": race_id, **spec.constraints}, ensure_ascii=False, indent=2),
+            json.dumps(
+                {"race_id": race_id, "gear_id": gear_id, "gear_reference": gear_reference, **spec.constraints},
+                ensure_ascii=False,
+                indent=2,
+            ),
             encoding="utf-8",
         )
         print(f"recognized race: {race_id}")
@@ -418,7 +444,8 @@ def main() -> None:
                 auto_ip_adapter_image = Path(reference)
                 print(f"  auto-loaded reference image: {reference}")
     else:
-        prompt = build_prompt(features, args.extra_prompt)
+        body = ", ".join(terms)
+        prompt = ", ".join(part for part in (args.extra_prompt, STYLE_PROMPT, body) if part)
     (output_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
     if args.features_only:
         timings = {
@@ -630,6 +657,9 @@ def main() -> None:
         "controlnet_model": str(args.controlnet_model.resolve()) if args.controlnet_model else None,
         "controlnet_scale": args.controlnet_scale if args.controlnet_model else None,
         "control_preprocessor": args.control_preprocessor if args.controlnet_model else None,
+        "race_id": race_id,
+        "gear_id": gear_id,
+        "gear_reference": gear_reference,
         "crop_subject": args.crop_subject,
         "crop": crop_info,
         "guidance_scale": args.guidance_scale,

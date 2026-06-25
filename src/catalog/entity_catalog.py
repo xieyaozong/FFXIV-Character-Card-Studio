@@ -13,6 +13,7 @@ class EntityRecord(BaseModel):
     aliases: dict[str, list[str]] = Field(default_factory=dict)
     visual_prompt: str = ""
     negative_prompt: list[str] = Field(default_factory=list)
+    reference_image: str = ""           # canonical glamour/gear reference (for later image injection)
     game_version: str = ""
     source: str = ""
     reviewed_at: str = ""

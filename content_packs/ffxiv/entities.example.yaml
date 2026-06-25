@@ -17,3 +17,14 @@ entities:
     source: ""
     reviewed_at: ""                     # YYYY-MM-DD
     notes: "Replace with your own verified entities."
+
+  - canonical_id: equipment.example_set # gear/glamour set recognized from the VLM outfit text
+    entity_type: equipment
+    names:
+      en-US: "Example Gear Set"
+    aliases:                            # distinctive words likely to appear in the outfit text;
+      en-US: [silver jacket, cargo pants]  # recognition fires when one of these is found
+    visual_prompt: "sleek silver bomber jacket, white cargo pants"  # verified appearance tokens
+    negative_prompt: [armor plates]
+    reference_image: ""                 # path to a canonical glamour shot (for later image injection)
+    notes: "When recognized, its visual_prompt backstops the look without the user prompting it."

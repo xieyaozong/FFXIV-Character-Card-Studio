@@ -14,6 +14,23 @@ Newest entries first. Each entry follows the same shape:
 
 ---
 
+## 2026-06-25 — Gear/glamour recognition (token backstop)
+
+**Done:** Extended the recognition loop to the equipment layer: match the VLM outfit text to a
+curated equipment entity and inject that set's verified appearance tokens, so the DB backstops the
+look instead of the user prompting it. No new dependency — reuses the entity catalog.
+**Changed:** new `src/catalog/gear_recognizer.py` (`recognize_gear`, keyword-containment match over
+`equipment` entities); `EntityRecord` gains `reference_image`; the runner recognizes gear before
+prompt assembly, prepends `visual_prompt` to the content terms and adds `negative_prompt`, records
+`gear_id`/`gear_reference` in `constraints.json` + `metadata.json`, and prints the match; new
+`--entities` arg; `entities.example.yaml` documents the equipment schema; tests in
+`test_gear_recognizer.py` (31 pass).
+**Tech:** entity catalog alias/keyword matching; deterministic, no model downloads.
+**Impact:** once the maintainer adds gear entities, recognizing an outfit auto-injects its curated
+look — the zero-prompt loop now covers gear, not just race. Inert until populated (the private
+`entities.yaml` is empty), so existing runs are unchanged. Reference-image injection (dual
+IP-Adapter, needs a general adapter download) is the queued follow-up.
+
 ## 2026-06-25 — Repo hygiene: `.ps1` runners are local-only
 
 **Done:** Stopped publishing PowerShell runners — they are personal param wrappers, not product
