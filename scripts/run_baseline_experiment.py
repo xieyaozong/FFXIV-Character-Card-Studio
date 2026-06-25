@@ -222,7 +222,9 @@ def fit_prompt_to_clip(prompt: str, tokenizer, max_tokens: int = 77) -> str:
     kept: list[str] = []
     for fragment in fragments:
         candidate = ", ".join([*kept, fragment])
-        if len(tokenizer(candidate, truncation=False).input_ids) > max_tokens:
+        # verbose=False: probing over-length candidates is expected, so silence the CLIP
+        # "token indices longer than 77" warning — the returned prompt is always within budget.
+        if len(tokenizer(candidate, truncation=False, verbose=False).input_ids) > max_tokens:
             break
         kept.append(fragment)
     return ", ".join(kept)
