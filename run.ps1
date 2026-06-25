@@ -42,6 +42,13 @@ $Steps         = 24      # 24–30
 $IpAdapterScale = 0.0    # 0 = 關閉；建議 0.5–0.8。要「兩者兼顧」就開這個再把 $Strength 拉高
 $IpAdapterImage = ""     # 留空 = 自動用角色臉部裁切；可指定一張臉部參考圖
 
+# ── 完成度（hi-res 放大 + 臉部細修）─────────────────────────
+$Hires           = $true   # 整張放大+輕重繪，提升解析度與完成度
+$HiresScale      = 1.5     # 放大倍率（1.5 → 768x1024 變 1152x1536）
+$HiresStrength   = 0.35    # 重繪強度（0.3–0.45；太高會偏離構圖）
+$FaceDetail      = $true   # 頭部高解析重畫+貼回，修臉並強制長出種族解剖
+$FaceDetailStrength = 0.5  # 臉部重繪強度（0.4–0.6）
+
 # ── Prompt 微調 ─────────────────────────────────────────────
 $ExtraPrompt    = ""     # 附加到 VLM 產生的 prompt 前面
 $PromptOverride = ""     # 完全覆蓋 VLM prompt（留空則用 VLM 結果）
@@ -74,12 +81,18 @@ $args_list = @(
     "--background-backend", $BackgroundBackend,
     "--crop-backend",    $CropBackend,
     "--crop-pad",        $CropPad,
-    "--ip-adapter-scale", $IpAdapterScale
+    "--ip-adapter-scale", $IpAdapterScale,
+    "--hires-scale",      $HiresScale,
+    "--hires-strength",   $HiresStrength,
+    "--face-detail-strength", $FaceDetailStrength
 )
 
 if ($IpAdapterImage -ne "") {
     $args_list += "--ip-adapter-image", $IpAdapterImage
 }
+
+if ($Hires)      { $args_list += "--hires" }      else { $args_list += "--no-hires" }
+if ($FaceDetail) { $args_list += "--face-detail" } else { $args_list += "--no-face-detail" }
 
 if ($CropSubject) {
     $args_list += "--crop-subject"

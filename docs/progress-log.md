@@ -106,3 +106,10 @@ Newest entries first. Each entry follows the same shape:
 **Changed:** `detail_face` in `run_baseline_experiment.py` (head crop → upscale → img2img with IP-Adapter + the guardrail prompt → gaussian-feathered paste-back); `--face-detail` / `--face-detail-strength` args; saves `result_predetail.png` for comparison.
 **Tech:** SDXL img2img on the cropped head, IP-Adapter identity, feathered compositing.
 **Impact:** the long-standing "nightmare face" problem is largely fixed — a head-zoom side-by-side shows a messy, asymmetric face (warped sunglasses, broken features) becoming a clean, symmetric one with the Au Ra horns/ears visible. Same machinery serves both goals: the head finally has enough pixels to render the face *and* re-asserts race anatomy in the head region. Remaining art-quality work: whole-image hi-res / upscale and possibly a refiner.
+
+### Implementation: whole-image hi-res pass
+
+**Done:** Added a hi-res pass — upscale the whole image ~1.5x and lightly re-render, before the face-detailer.
+**Changed:** `hires_fix` in `run_baseline_experiment.py`; `--hires` / `--hires-scale` / `--hires-strength` args; pipeline order is now gen → hires → face-detail; saves `result_base.png`; `run.ps1` exposes the new hi-res / face-detail tunables.
+**Tech:** SDXL img2img refine at 1152×1536, IP-Adapter identity.
+**Impact:** the final card is 1152×1536 with markedly higher artistic completion — sharper linework, more finished outfit/boots, and a clean symmetric face with visible Au Ra horns / fin-ears and hinted neck scales. Combined with the face-detailer this resolves the "low completion" complaint for this character; the output now reads as a real anime illustration rather than a feature dump.

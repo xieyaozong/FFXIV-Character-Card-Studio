@@ -112,6 +112,14 @@ def parse_args() -> argparse.Namespace:
         help="Re-render the head region at high resolution and blend it back (face quality + repair).",
     )
     parser.add_argument("--face-detail-strength", type=float, default=0.5)
+    parser.add_argument(
+        "--hires",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Upscale and lightly re-render the whole image for resolution and polish.",
+    )
+    parser.add_argument("--hires-scale", type=float, default=1.5)
+    parser.add_argument("--hires-strength", type=float, default=0.35)
     return parser.parse_args()
 
 
@@ -212,6 +220,24 @@ def parse_lora_specs(values: list[str]) -> list[tuple[Path, float]]:
             raise FileNotFoundError(path)
         specs.append((path, weight))
     return specs
+
+
+def hires_fix(pipeline, image, *, prompt, negative, ip_image, scale, strength, steps, guidance, generator):
+    """Upscale the whole image and lightly re-render it for higher resolution and polish."""
+    width, height = image.size
+    target = (max(8, round(width * scale / 8) * 8), max(8, round(height * scale / 8) * 8))
+    kwargs = {
+        "prompt": prompt,
+        "negative_prompt": negative,
+        "image": image.resize(target, Image.Resampling.LANCZOS),
+        "strength": strength,
+        "guidance_scale": guidance,
+        "num_inference_steps": steps,
+        "generator": generator,
+    }
+    if ip_image is not None:
+        kwargs["ip_adapter_image"] = ip_image
+    return pipeline(**kwargs).images[0]
 
 
 def detail_face(pipeline, image, *, prompt, negative, ip_image, strength, steps, guidance, generator):
@@ -449,8 +475,21 @@ def main() -> None:
     if ip_adapter_image is not None:
         generation_kwargs["ip_adapter_image"] = ip_adapter_image
     output_image = pipeline(**generation_kwargs).images[0]
+    output_image.save(output_dir / "result_base.png")
+    if args.hires:
+        output_image = hires_fix(
+            pipeline,
+            output_image,
+            prompt=prompt_used,
+            negative=negative_used,
+            ip_image=ip_adapter_image,
+            scale=args.hires_scale,
+            strength=args.hires_strength,
+            steps=args.steps,
+            guidance=args.guidance_scale,
+            generator=generator,
+        )
     if args.face_detail:
-        output_image.save(output_dir / "result_predetail.png")
         face_prompt = fit_prompt_to_clip("portrait, detailed face, " + prompt_used, pipeline.tokenizer)
         output_image = detail_face(
             pipeline,
