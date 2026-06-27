@@ -189,6 +189,27 @@ code, schema, format docs, and minimal `*.example.yaml` templates. The filled-in
 `entities.yaml`, `lore/`, reference images, any RAG index) is git-ignored. Others fork the framework and build their
 own database. Implemented 2026-06-23: templates shipped, real data untracked and scrubbed from history.
 
+### 5.5 Special-feature reference layer (a supplement, not a foundation)
+
+**Decided 2026-06-28.** Generation's primary feature source is the **user's screenshot + what the generation
+model already knows** — those construct the character. The maintainer's captured reference shots are **not** the
+foundation of all creation and **not** a classifier that forces the user's character into a stored variant. They are a
+targeted **reference library for the special-race feature *parts* the model renders badly**: Au Ra body scales and the
+4 horn/face types, Miqo'te / Hrothgar / Viera ears, Miqo'te facial markings, Hrothgar whiskers, and so on.
+
+This mirrors §2 "lore guards, the user drives": the references **guard / supplement** the hard special parts; they are
+invoked only when needed, never as a mandatory pipeline base.
+
+- **Used for:** (a) a taxonomy of which variants exist → **validation constraints** (catch "type-3 horn → type-1") and
+  one-tap **confirmation options**; (b) an optional **region reference** (e.g. feed the right horn/scale reference) when
+  the screenshot is ambiguous or the model botches the part; (c) backstopping an *occluded* feature.
+- **Not used for:** forcing every generation through variant classification (cross-domain variant ID is unreliable —
+  race-level embedding was only ~44%), or as the base of creation.
+- **Where it lives:** `special_features.yaml` (private) enumerates each special race's feature parts + variant counts;
+  the actual reference images live under `reference/` (private). A `special_features.example.yaml` ships as the template.
+- **Au Ra creator facts** (recorded in the private file): 4 horn types == 4 face types; the per race/clan/gender
+  capture is roughly body → tail → horns/face (4 types) → full-makeup scale variants, all shot in the cleanest state.
+
 ## 6. Recognition flow
 
 ```text

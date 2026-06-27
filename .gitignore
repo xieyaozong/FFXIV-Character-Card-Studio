@@ -37,6 +37,7 @@ datasets/
 content_packs/ffxiv/anatomy_rules.yaml
 content_packs/ffxiv/entities.yaml
 content_packs/ffxiv/race_signatures.yaml
+content_packs/ffxiv/special_features.yaml
 content_packs/ffxiv/*.draft.yaml
 content_packs/ffxiv/*.npz
 content_packs/ffxiv/lore/

@@ -1,0 +1,19 @@
+# Example special-feature reference index — the FORMAT only.
+# Copy to `special_features.yaml` (git-ignored) and fill with your own verified data.
+#
+# Purpose: enumerate the special-race feature PARTS that need a reference because models render
+# them badly. This is a SUPPLEMENT/guardrail, not the foundation of generation (see
+# docs/knowledge-layer.md §5.5). Reference images live under reference/<race>/<feature>/<variant>/.
+#
+# Per feature:
+#   variants:   how many distinct types the creator offers (null = not yet counted)
+#   note:       free-text clarification
+#   reference:  optional path to the reference-image folder (private)
+
+races:
+  example_race:
+    features:
+      example_part:                 # e.g. horns | ears | face | body_scales | facial_markings | whiskers | tail
+        variants: 4
+        note: "what makes this part special / how variants differ"
+        reference: reference/example_race/example_part/
