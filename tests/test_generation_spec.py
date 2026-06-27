@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from src.catalog.race_recognizer import RaceSignature
 from src.domain.models import RaceTraits
+from src.knowledge.races import RaceSignature
 from src.prompting.spec import compile_generation_spec
 
 SIGNATURES = {

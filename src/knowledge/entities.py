@@ -20,7 +20,7 @@ class EntityRecord(BaseModel):
     notes: str = ""
 
 
-class EntityCatalog:
+class EntityStore:
     def __init__(self, records: list[EntityRecord]) -> None:
         self.records = records
         self.alias_index: dict[str, EntityRecord] = {}
@@ -31,7 +31,7 @@ class EntityCatalog:
                 self.alias_index[value.casefold().strip()] = record
 
     @classmethod
-    def load(cls, path: Path | str) -> EntityCatalog:
+    def load(cls, path: Path | str) -> EntityStore:
         data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
         records = [EntityRecord.model_validate(item) for item in data.get("entities", [])]
         return cls(records)

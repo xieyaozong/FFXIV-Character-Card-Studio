@@ -104,9 +104,9 @@ def parse_args() -> argparse.Namespace:
         default=True,
         help="Recognize the race and inject its lore guardrails (required tokens, forbidden negatives).",
     )
-    parser.add_argument("--race-signatures", type=Path, default=Path("content_packs/ffxiv/race_signatures.yaml"))
-    parser.add_argument("--anatomy-rules", type=Path, default=Path("content_packs/ffxiv/anatomy_rules.yaml"))
-    parser.add_argument("--entities", type=Path, default=Path("content_packs/ffxiv/entities.yaml"))
+    parser.add_argument("--race-signatures", type=Path, default=Path("knowledge/ffxiv/race_signatures.yaml"))
+    parser.add_argument("--anatomy-rules", type=Path, default=Path("knowledge/ffxiv/anatomy_rules.yaml"))
+    parser.add_argument("--entities", type=Path, default=Path("knowledge/ffxiv/entities.yaml"))
     parser.add_argument(
         "--head-zoom-traits",
         action=argparse.BooleanOptionalAction,
@@ -119,12 +119,12 @@ def parse_args() -> argparse.Namespace:
         default=True,
         help="Combine VLM traits with image-embedding kNN over the race index for race recognition.",
     )
-    parser.add_argument("--race-index", type=Path, default=Path("content_packs/ffxiv/race_index.npz"))
+    parser.add_argument("--race-index", type=Path, default=Path("knowledge/ffxiv/race_index.npz"))
     parser.add_argument(
         "--auto-assets",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Auto-load the recognized race's curated LoRA(s) and reference image from the content pack.",
+        help="Auto-load the recognized race's curated LoRA(s) and reference image from the knowledge data.",
     )
     parser.add_argument(
         "--face-detail",
@@ -443,10 +443,10 @@ def main() -> None:
     # appearance tokens, so the DB backstops the look instead of the user prompting it.
     terms = content_terms(features)
     if not args.prompt_override.strip() and args.entities.is_file():
-        from src.catalog.entity_catalog import EntityCatalog
-        from src.catalog.gear_recognizer import recognize_gear
+        from src.knowledge.entities import EntityStore
+        from src.knowledge.gear import recognize_gear
 
-        gear_match = recognize_gear(terms, EntityCatalog.load(args.entities))
+        gear_match = recognize_gear(terms, EntityStore.load(args.entities))
         if gear_match:
             gear = gear_match.record
             gear_id = gear.canonical_id
@@ -468,8 +468,8 @@ def main() -> None:
     elif guardrails_on:
         import yaml
 
-        from src.catalog.race_recognizer import load_race_signatures
         from src.domain.models import RaceTraits
+        from src.knowledge.races import load_race_signatures
         from src.prompting.spec import compile_generation_spec
 
         anatomy_rules_data = yaml.safe_load(args.anatomy_rules.read_text(encoding="utf-8")) or {}
@@ -480,8 +480,8 @@ def main() -> None:
         ensemble_race: str | None = None
         ensemble_used = False
         if args.ensemble_race and args.race_index.is_file():
-            from src.catalog.race_classifier import ClipEmbedder, RaceIndex, head_region, on_white
-            from src.catalog.race_ensemble import recognize_race_ensemble
+            from src.knowledge.race_index import ClipEmbedder, RaceIndex, head_region, on_white
+            from src.knowledge.race_matcher import recognize_race_ensemble
 
             embedder = ClipEmbedder(args.ip_adapter_image_encoder)
             head = on_white(head_region(character_image))
@@ -521,7 +521,7 @@ def main() -> None:
 
         # Recognition drives generation: auto-load the race's curated LoRA(s) + reference image.
         if args.auto_assets and race_id:
-            from src.catalog.asset_resolver import resolve_race_assets
+            from src.knowledge.assets import resolve_race_assets
 
             assets = resolve_race_assets(race_id, anatomy_rules_data)
             existing = {Path(spec_str.rsplit("=", 1)[0]).resolve() for spec_str in args.lora}

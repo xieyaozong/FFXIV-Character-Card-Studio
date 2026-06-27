@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.catalog.race_recognizer import (
+from src.domain.models import RaceTraits
+from src.knowledge.races import (
     RaceSignature,
     apply_canonical_traits,
     load_race_signatures,
     recognize_race,
 )
-from src.domain.models import RaceTraits
 
 AU_RA = RaceSignature(
     signature={"horns": "present", "scales": "face", "tail_type": "scaled"},
@@ -82,6 +82,6 @@ def test_correction_locks_race_defining_traits() -> None:
 
 
 def test_example_signatures_file_loads() -> None:
-    signatures = load_race_signatures(Path("content_packs/ffxiv/race_signatures.example.yaml"))
+    signatures = load_race_signatures(Path("knowledge/ffxiv/race_signatures.example.yaml"))
     assert "example_race" in signatures
     assert signatures["example_race"].signature["horns"] == "present"

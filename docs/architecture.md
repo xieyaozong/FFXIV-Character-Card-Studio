@@ -44,7 +44,7 @@ exceptions while still preventing accidental human ears, missing tails, wrong sc
 
 ## Maintainable FFXIV Data
 
-`content_packs/ffxiv/` is the editable source of truth. YAML files hold stable IDs, multilingual aliases, anatomy rules,
+`knowledge/ffxiv/` is the editable source of truth. YAML files hold stable IDs, multilingual aliases, anatomy rules,
 prompt tokens, provenance, game version, and review dates. New races, clans, NPC appearances, and patch changes are data
 updates rather than model retraining. Vector search may index this content for lookup, but it never replaces the YAML
 records.

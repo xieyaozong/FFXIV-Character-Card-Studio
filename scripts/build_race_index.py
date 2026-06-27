@@ -1,9 +1,9 @@
 """Build the image-embedding race index from the labeled base_character reference DB.
 
 Embeds each reference's head region with CLIP and saves a labeled index for runtime kNN race
-recognition (see src/catalog/race_classifier.py). Run once; re-run when the reference DB changes.
+recognition (see src/knowledge/race_index.py). Run once; re-run when the reference DB changes.
 
-    python scripts/build_race_index.py --base-dir datasets/base_character --out content_packs/ffxiv/race_index.npz
+    python scripts/build_race_index.py --base-dir datasets/base_character --out knowledge/ffxiv/race_index.npz
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build the CLIP race index from base_character.")
     parser.add_argument("--base-dir", type=Path, default=Path("datasets/base_character"))
-    parser.add_argument("--out", type=Path, default=Path("content_packs/ffxiv/race_index.npz"))
+    parser.add_argument("--out", type=Path, default=Path("knowledge/ffxiv/race_index.npz"))
     parser.add_argument("--encoder", type=Path, default=Path("models/ip-adapter/models/image_encoder"))
     parser.add_argument("--per-leaf", type=int, default=0, help="Cap images per clan/gender folder (0 = all).")
     parser.add_argument(
@@ -49,7 +49,7 @@ def collect(base_dir: Path, per_leaf: int) -> list[tuple[str, Path]]:
 
 
 def main() -> None:
-    from src.catalog.race_classifier import ClipEmbedder, RaceIndex, character_frame, head_region, on_white
+    from src.knowledge.race_index import ClipEmbedder, RaceIndex, character_frame, head_region, on_white
 
     args = parse_args()
     items = collect(args.base_dir, args.per_leaf)

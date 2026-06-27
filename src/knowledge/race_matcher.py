@@ -12,9 +12,9 @@ races (cat / rabbit / muzzle / tiny / tall), embedding ranks Au Ra-type highest.
 
 from __future__ import annotations
 
-from src.catalog.race_classifier import RaceIndex
-from src.catalog.race_recognizer import RaceMatch, RaceSignature, recognize_race
 from src.domain.models import RaceTraits
+from src.knowledge.race_index import RaceIndex
+from src.knowledge.races import RaceMatch, RaceSignature, recognize_race
 
 
 def to_race_id(name: str) -> str:

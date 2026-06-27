@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from src.catalog.race_recognizer import RaceSignature, recognize_race
 from src.domain.models import RaceTraits
+from src.knowledge.races import RaceSignature, recognize_race
 
 
 @dataclass

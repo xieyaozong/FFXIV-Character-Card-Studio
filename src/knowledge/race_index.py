@@ -20,7 +20,7 @@ from PIL import Image
 
 # Default CLIP ViT-H image encoder (already downloaded for IP-Adapter).
 DEFAULT_ENCODER = Path("models/ip-adapter/models/image_encoder")
-DEFAULT_INDEX = Path("content_packs/ffxiv/race_index.npz")
+DEFAULT_INDEX = Path("knowledge/ffxiv/race_index.npz")
 
 
 def character_frame(image: Image.Image) -> Image.Image:

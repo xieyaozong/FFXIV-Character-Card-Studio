@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from src.catalog.entity_catalog import EntityCatalog, EntityRecord
+from src.knowledge.entities import EntityRecord, EntityStore
 
 
 @dataclass
@@ -30,7 +30,7 @@ def _keywords(record: EntityRecord) -> list[str]:
 
 def recognize_gear(
     outfit_terms: list[str],
-    catalog: EntityCatalog,
+    store: EntityStore,
     *,
     entity_types: tuple[str, ...] = ("equipment",),
     min_hits: int = 1,
@@ -38,7 +38,7 @@ def recognize_gear(
     """Return the best equipment entity whose keywords appear in the outfit text, or None."""
     text = " , ".join(outfit_terms).casefold()
     best: GearMatch | None = None
-    for record in catalog.records:
+    for record in store.records:
         if record.entity_type not in entity_types:
             continue
         matched = sorted({keyword for keyword in _keywords(record) if keyword in text})

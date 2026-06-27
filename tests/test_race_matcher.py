@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from src.catalog.race_classifier import RaceIndex
-from src.catalog.race_ensemble import recognize_race_ensemble, to_race_id
-from src.catalog.race_recognizer import RaceSignature
 from src.domain.models import RaceTraits
+from src.knowledge.race_index import RaceIndex
+from src.knowledge.race_matcher import recognize_race_ensemble, to_race_id
+from src.knowledge.races import RaceSignature
 
 SIGNATURES = {
     "au_ra": RaceSignature(signature={"horns": "present", "ear_type": "scaled_fin"}, decisive=["horns", "ear_type"]),

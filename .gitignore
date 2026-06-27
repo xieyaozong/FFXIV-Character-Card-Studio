@@ -5,47 +5,44 @@ __pycache__/
 .venv/
 venv/
 .env
-.gradio/
 .cache/
 
-# Claude Code tooling config (personal, machine-specific)
+# Local editor/tool settings.
 .claude/
 
-# Local PowerShell runners — personal param wrappers, not product flow.
-# The real flow lives in scripts/ (Python CLIs); see docs/ for commands.
+# Local PowerShell runners. The published flow is the Python CLI in scripts/.
 *.ps1
 
-# Model weights, LoRAs, and conditioning checkpoints (downloaded locally, never published)
+# Model weights, LoRAs, and checkpoints stay local.
 models/*
 !models/README.md
 !models/model-manifest.example.yaml
 loras/
 checkpoints/
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.onnx
 
-# Private FFXIV screenshots and generated output (never published)
+# Private inputs, datasets, and outputs stay local.
 character/
 example/
 private_inputs/*
 !private_inputs/.gitkeep
 outputs/*
 !outputs/.gitkeep
-# Per-character LoRA datasets and trained weights — private, the maintainer's IP.
 datasets/
 
-# Curated FFXIV knowledge data — the maintainer's IP, kept private like model weights.
-# Only the *.example.yaml templates and the format docs are published.
-content_packs/ffxiv/anatomy_rules.yaml
-content_packs/ffxiv/entities.yaml
-content_packs/ffxiv/race_signatures.yaml
-content_packs/ffxiv/special_features.yaml
-content_packs/ffxiv/*.draft.yaml
-content_packs/ffxiv/*.npz
-content_packs/ffxiv/lore/
-content_packs/ffxiv/reference/
-*.safetensors
-*.ckpt
-*.pt
-*.pth
-*.onnx
+# Curated FFXIV knowledge data is private; only examples are published.
+knowledge/ffxiv/anatomy_rules.yaml
+knowledge/ffxiv/entities.yaml
+knowledge/ffxiv/race_signatures.yaml
+knowledge/ffxiv/special_features.yaml
+knowledge/ffxiv/*.draft.yaml
+knowledge/ffxiv/*.npz
+knowledge/ffxiv/lore/
+knowledge/ffxiv/reference/
+
 .DS_Store
 Thumbs.db
