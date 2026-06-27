@@ -36,19 +36,25 @@ def compile_generation_spec(
     race_signatures: dict[str, RaceSignature],
     anatomy_rules: dict,
     extra_prompt: str = "",
+    race_id: str | None = None,
+    recognized: bool = False,
 ) -> GenerationSpec:
     """Recognize the race, then assemble the two channels as separate blocks (see knowledge-layer.md §9).
 
     The lore-required tokens sit ahead of user content so they survive CLIP truncation; the forbidden
     tokens go to the negative. When no race is recognized, only the content channel is used.
+
+    Pass ``recognized=True`` with a ``race_id`` (which may be None) to use an externally decided race
+    (e.g. the ensemble recognizer) instead of running the trait recognizer here.
     """
-    match = recognize_race(traits, race_signatures)
+    if not recognized:
+        race_id = recognize_race(traits, race_signatures).race_id
     required_tokens: list[str] = []
     forbidden_tokens: list[str] = []
     constraints: dict[str, list[str]] = {"required": [], "forbidden": []}
 
-    if match.race_id:
-        profile = anatomy_profile_for(match.race_id, anatomy_rules)
+    if race_id:
+        profile = anatomy_profile_for(race_id, anatomy_rules)
         if profile:
             tokens = profile.get("generation_tokens") or {}
             required_tokens = list(tokens.get("positive") or [])
@@ -60,4 +66,4 @@ def compile_generation_spec(
 
     positive = ", ".join(part for part in [extra_prompt, style_prompt, *required_tokens, *content_terms] if part)
     negative = ", ".join(part for part in [*forbidden_tokens, base_negative] if part)
-    return GenerationSpec(positive, negative, constraints, match.race_id)
+    return GenerationSpec(positive, negative, constraints, race_id)

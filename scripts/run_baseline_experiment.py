@@ -113,6 +113,13 @@ def parse_args() -> argparse.Namespace:
         help="Second VLM pass on a zoomed head crop to catch small horns/ears/scales the full shot misses.",
     )
     parser.add_argument(
+        "--ensemble-race",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Combine VLM traits with image-embedding kNN over the race index for race recognition.",
+    )
+    parser.add_argument("--race-index", type=Path, default=Path("content_packs/ffxiv/race_index.npz"))
+    parser.add_argument(
         "--auto-assets",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -432,14 +439,38 @@ def main() -> None:
         from src.prompting.spec import compile_generation_spec
 
         anatomy_rules_data = yaml.safe_load(args.anatomy_rules.read_text(encoding="utf-8")) or {}
+        signatures = load_race_signatures(args.race_signatures)
+        traits_obj = RaceTraits.model_validate(features.get("traits", {}))
+
+        # Ensemble: combine the VLM traits with image-embedding kNN over the reference index.
+        ensemble_race: str | None = None
+        ensemble_used = False
+        if args.ensemble_race and args.race_index.is_file():
+            from src.catalog.race_classifier import ClipEmbedder, RaceIndex, head_region, on_white
+            from src.catalog.race_ensemble import recognize_race_ensemble
+
+            embedder = ClipEmbedder(args.ip_adapter_image_encoder)
+            head = on_white(head_region(character_image))
+            head.save(output_dir / "race_query.png")
+            ensemble = recognize_race_ensemble(
+                traits_obj, signatures, embedding=embedder.embed(head), index=RaceIndex.load(args.race_index)
+            )
+            ensemble_race = ensemble.race_id
+            ensemble_used = True
+            del embedder
+            gc.collect()
+            print(f"ensemble race: {ensemble_race} conf={ensemble.confidence} ({'; '.join(ensemble.reasons)})")
+
         spec = compile_generation_spec(
             content_terms=terms,
             style_prompt=STYLE_PROMPT,
             base_negative=negative_prompt,
-            traits=RaceTraits.model_validate(features.get("traits", {})),
-            race_signatures=load_race_signatures(args.race_signatures),
+            traits=traits_obj,
+            race_signatures=signatures,
             anatomy_rules=anatomy_rules_data,
             extra_prompt=args.extra_prompt,
+            race_id=ensemble_race,
+            recognized=ensemble_used,
         )
         prompt = spec.positive_prompt
         negative_prompt = spec.negative_prompt
