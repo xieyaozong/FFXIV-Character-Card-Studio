@@ -2,7 +2,24 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from src.domain.models import FeatureCandidate
+from src.domain.models import FeatureCandidate, RaceTraits
+
+# Traits a head-and-shoulders crop can judge better than a full-body shot.
+HEAD_TRAITS = ("ear_type", "horns", "scales", "face_type")
+
+
+def merge_head_traits(full: RaceTraits, head: RaceTraits) -> RaceTraits:
+    """Let the zoomed head pass override head traits, keeping the full-body tail/stature.
+
+    The head crop makes small/pale horns and faint scales legible, so a concrete reading there
+    (anything but "occluded") wins over the full-body pass — fixing its confident false negatives.
+    """
+    merged = full.model_copy(deep=True)
+    for field in HEAD_TRAITS:
+        head_value = getattr(head, field)
+        if head_value != "occluded":
+            setattr(merged, field, head_value)
+    return merged
 
 
 def merge_feature_candidates(groups: list[list[FeatureCandidate]]) -> list[FeatureCandidate]:

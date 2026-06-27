@@ -17,6 +17,13 @@ MINOR_MISMATCH = -1.0
 MIN_SCORE = 2.0
 MIN_MARGIN = 2.0
 
+# Traits the VLM under-detects (small/pale/easily-missed), mapped to their "nothing here" value.
+# A negative reading on these is likely a MISS, not a real contradiction, so it earns no penalty —
+# this stops the all-negative Hyur signature from soaking up false negatives like a missed horn.
+# ear_type / stature / face_type are deliberately excluded: ears, body height, and a muzzle are
+# obvious, so "human" / "average" there are reliable discriminators that should rule races out.
+UNDERDETECTED_NEGATIVE = {"horns": "absent", "scales": "absent", "tail_type": "none"}
+
 
 class RaceSignature(BaseModel):
     """A race's defining traits, used both to recognize the race and to correct perception."""
@@ -50,7 +57,11 @@ def _score_race(observed: dict[str, str], sig: RaceSignature) -> float:
         decisive = trait in sig.decisive
         if value == canonical:
             score += DECISIVE_MATCH if decisive else MINOR_MATCH
+        elif UNDERDETECTED_NEGATIVE.get(trait) == value:
+            # VLM saw "nothing here" on a subtle trait — likely a miss, not a real contradiction.
+            continue
         else:
+            # A real disagreement (two distinct features, or a reliably-seen value): penalize.
             score += DECISIVE_CONTRADICTION if decisive else MINOR_MISMATCH
     return score
 

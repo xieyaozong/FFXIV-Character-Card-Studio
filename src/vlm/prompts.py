@@ -1,5 +1,24 @@
 from __future__ import annotations
 
+TRAITS_EXTRACTION_PROMPT = """
+This is a CLOSE-UP crop of one character's head and shoulders. Report ONLY the visible anatomical
+traits, as a single JSON object with exactly these fields:
+{ "ear_type": "human", "horns": "absent", "scales": "absent", "face_type": "human",
+  "tail_type": "occluded", "stature": "occluded" }
+Allowed values:
+- ear_type: human, long_pointed, feline, rabbit_long, leonine, scaled_fin, occluded
+- horns: present, absent, occluded
+- scales: face, body, absent, occluded
+- face_type: human, feline_muzzle, occluded
+This is a zoomed-in view, so small or subtle details are now clearly visible. Look very carefully:
+horns may be small, pale, or rise near the hairline; ears may be pointed, feline, rabbit-like, or
+scaled fin-shaped (report fin/scaled side-of-head structures as scaled_fin); scales can be faint
+patches on the cheeks, brow, jaw, or neck. Do NOT report "absent"
+for anything you can see even faintly — only use "absent" when the region is clearly bare. If hair
+or a hat truly hides a region, use "occluded". The tail and overall body height are NOT in this crop:
+always set tail_type and stature to "occluded". Return only the JSON object. Do not use Markdown.
+""".strip()
+
 FEATURE_EXTRACTION_PROMPT = """
 Analyze only visible evidence in the supplied character screenshots. Images are numbered image_1, image_2, and so on.
 Report what you SEE. Do not infer game lore and do not name the race.
@@ -38,12 +57,13 @@ Return only one JSON object using this exact shape:
   }
 }
 The "traits" object is required. For each field choose exactly one allowed value:
-- ear_type: human, long_pointed, feline, rabbit_long, leonine, occluded
+- ear_type: human, long_pointed, feline, rabbit_long, leonine, scaled_fin, occluded
 - horns: present, absent, occluded
 - scales: face, body, absent, occluded
 - tail_type: scaled, feline_furred, none, occluded
 - stature: child_short, average, large_tall, occluded
 - face_type: human, feline_muzzle, occluded
+Report fin-shaped or scaled side-of-head ear structures as scaled_fin.
 Look carefully before choosing each trait: small horns near the hairline or beside a hat, subtle scales on the cheeks
 or neck, and a thin or short tail are easy to miss. Inspect the head, sides of the face, neck, and lower body. Prefer
 "occluded" over "absent" or "none" when a hat, hair, pose, or framing hides the region, or when you are unsure; use

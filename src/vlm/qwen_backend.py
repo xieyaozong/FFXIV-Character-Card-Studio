@@ -4,8 +4,8 @@ from json import JSONDecodeError, loads
 
 from PIL import Image
 
-from src.domain.models import EvidenceRef, VLMFeatureResponse
-from src.vlm.prompts import FEATURE_EXTRACTION_PROMPT
+from src.domain.models import EvidenceRef, RaceTraits, VLMFeatureResponse
+from src.vlm.prompts import FEATURE_EXTRACTION_PROMPT, TRAITS_EXTRACTION_PROMPT
 
 
 def prepare_vlm_images(images: list[Image.Image], max_side: int = 1024) -> list[Image.Image]:
@@ -47,6 +47,29 @@ class QwenVLMBackend:
             device_map="auto",
         )
         self.max_new_tokens = max_new_tokens
+
+    def _generate(self, images: list[Image.Image], prompt: str, max_new_tokens: int) -> str:
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    *[{"type": "image", "image": image} for image in images],
+                    {"type": "text", "text": prompt},
+                ],
+            }
+        ]
+        text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        inputs = self.processor(text=[text], images=images, padding=True, return_tensors="pt")
+        inputs = inputs.to(self.model.device)
+        generated = self.model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
+        trimmed = [output[len(source) :] for source, output in zip(inputs.input_ids, generated, strict=True)]
+        return self.processor.batch_decode(trimmed, skip_special_tokens=True)[0]
+
+    def extract_traits(self, image: Image.Image) -> RaceTraits:
+        """Second pass on a zoomed head crop, where small/pale horns and faint scales are legible."""
+        prepared = prepare_vlm_images([image])
+        response = self._generate(prepared, TRAITS_EXTRACTION_PROMPT, max_new_tokens=200)
+        return RaceTraits.model_validate(extract_json(response))
 
     def analyze(self, images: list[Image.Image]) -> VLMFeatureResponse:
         images = prepare_vlm_images(images)

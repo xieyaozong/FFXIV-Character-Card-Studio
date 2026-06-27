@@ -20,6 +20,35 @@ MIQOTE = RaceSignature(
 )
 SIGNATURES = {"au_ra": AU_RA, "miqote": MIQOTE}
 
+# Reproduces the real-world failure: the VLM false-negatived the pale horns / faint scales / tail
+# but the head-zoom pass caught the scaled fin-ears. The all-baseline Hyur signature must NOT win.
+AU_RA_FIN = RaceSignature(
+    signature={"horns": "present", "ear_type": "scaled_fin", "scales": "face", "tail_type": "scaled"},
+    decisive=["horns", "ear_type"],
+)
+HYUR = RaceSignature(
+    signature={"ear_type": "human", "horns": "absent", "scales": "absent", "tail_type": "none", "stature": "average"},
+    decisive=[],
+)
+FIN_SIGNATURES = {"au_ra": AU_RA_FIN, "hyur": HYUR}
+
+
+def test_fin_ears_beat_hyur_despite_false_negatives() -> None:
+    traits = RaceTraits(
+        ear_type="scaled_fin", horns="absent", scales="absent", tail_type="none", stature="average", face_type="human"
+    )
+    match = recognize_race(traits, FIN_SIGNATURES)
+    assert match.race_id == "au_ra"
+    assert not match.needs_confirmation
+
+
+def test_plain_human_still_recognized_as_hyur() -> None:
+    traits = RaceTraits(
+        ear_type="human", horns="absent", scales="absent", tail_type="none", stature="average", face_type="human"
+    )
+    match = recognize_race(traits, FIN_SIGNATURES)
+    assert match.race_id == "hyur"
+
 
 def test_decisive_trait_recognizes_au_ra() -> None:
     # The VLM mis-typed the tail and missed scales, but horns=present is decisive.

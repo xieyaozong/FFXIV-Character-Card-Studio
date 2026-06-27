@@ -107,6 +107,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--anatomy-rules", type=Path, default=Path("content_packs/ffxiv/anatomy_rules.yaml"))
     parser.add_argument("--entities", type=Path, default=Path("content_packs/ffxiv/entities.yaml"))
     parser.add_argument(
+        "--head-zoom-traits",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Second VLM pass on a zoomed head crop to catch small horns/ears/scales the full shot misses.",
+    )
+    parser.add_argument(
         "--auto-assets",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -360,6 +366,23 @@ def main() -> None:
         load_seconds = perf_counter() - load_started
         analysis_started = perf_counter()
         features = vlm.analyze([character_image, weapon_image]).model_dump(mode="json")
+        if args.head_zoom_traits:
+            from src.domain.models import RaceTraits
+            from src.vlm.feature_merger import merge_head_traits
+
+            cw, ch = character_image.size
+            # Keep near-full width so side-protruding horns/fin-ears are not cropped off.
+            head_crop = character_image.crop((round(cw * 0.05), 0, round(cw * 0.95), round(ch * 0.45)))
+            head_crop.save(output_dir / "head_zoom.png")
+            head_traits = vlm.extract_traits(head_crop)
+            full_traits = RaceTraits.model_validate(features.get("traits", {}))
+            merged = merge_head_traits(full_traits, head_traits)
+            features["traits"] = merged.model_dump(mode="json")
+            print(
+                f"head-zoom traits: horns={head_traits.horns} ear={head_traits.ear_type} "
+                f"scales={head_traits.scales} face={head_traits.face_type} "
+                f"(full had horns={full_traits.horns})"
+            )
         analysis_seconds = perf_counter() - analysis_started
         del vlm
         gc.collect()

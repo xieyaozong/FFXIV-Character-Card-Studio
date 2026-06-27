@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class EvidenceStatus(StrEnum):
@@ -102,12 +102,23 @@ class RaceTraits(BaseModel):
     sees; it never names the race. Allowed values are listed beside each field.
     """
 
-    ear_type: str = "occluded"   # human | long_pointed | feline | rabbit_long | leonine | occluded
+    ear_type: str = "occluded"   # human | long_pointed | feline | rabbit_long | leonine | scaled_fin | occluded
     horns: str = "occluded"      # present | absent | occluded
     scales: str = "occluded"     # face | body | absent | occluded
     tail_type: str = "occluded"  # scaled | feline_furred | none | occluded
     stature: str = "occluded"    # child_short | average | large_tall | occluded
     face_type: str = "occluded"  # human | feline_muzzle | occluded
+
+    @field_validator("ear_type", mode="before")
+    @classmethod
+    def _normalize_ear_type(cls, value: object) -> object:
+        """Map free-text VLM variants to canonical values (e.g. 'fin-shaped' -> 'scaled_fin')."""
+        if not isinstance(value, str):
+            return value
+        normalized = value.strip().lower().replace("-", "_").replace(" ", "_")
+        if "fin" in normalized:
+            return "scaled_fin"
+        return normalized or "occluded"
 
 
 class VLMFeatureResponse(BaseModel):
