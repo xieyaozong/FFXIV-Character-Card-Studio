@@ -29,7 +29,7 @@ def extract_json(text: str) -> dict:
 
 
 class QwenVLMBackend:
-    def __init__(self, model_id: str, max_new_tokens: int = 1200) -> None:
+    def __init__(self, model_id: str, max_new_tokens: int = 1200, load_in_4bit: bool = False) -> None:
         try:
             from transformers import AutoProcessor
         except ImportError as exc:
@@ -40,12 +40,23 @@ class QwenVLMBackend:
         else:
             from transformers import Qwen3VLForConditionalGeneration as QwenVLModel
 
+        kwargs: dict[str, object] = {"device_map": "auto"}
+        if load_in_4bit:
+            # 4-bit NF4 lets the 8B fit a 16 GB card (~6 GB) without an fp16 OOM.
+            import torch
+            from transformers import BitsAndBytesConfig
+
+            kwargs["quantization_config"] = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_compute_dtype=torch.bfloat16,
+            )
+        else:
+            kwargs["torch_dtype"] = "auto"
+
         self.processor = AutoProcessor.from_pretrained(model_id)
-        self.model = QwenVLModel.from_pretrained(
-            model_id,
-            torch_dtype="auto",
-            device_map="auto",
-        )
+        self.model = QwenVLModel.from_pretrained(model_id, **kwargs)
         self.max_new_tokens = max_new_tokens
 
     def _generate(self, images: list[Image.Image], prompt: str, max_new_tokens: int) -> str:

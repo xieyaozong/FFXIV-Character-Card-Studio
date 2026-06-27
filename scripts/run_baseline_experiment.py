@@ -37,6 +37,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--character-image", type=Path, required=True)
     parser.add_argument("--weapon-image", type=Path, required=True)
     parser.add_argument("--vlm-model", type=Path, default=Path("models/vlm/Qwen3-VL-4B-Instruct"))
+    parser.add_argument("--vlm-4bit", action="store_true", help="Load the VLM in 4-bit (needed to fit the 8B in 16GB).")
     parser.add_argument(
         "--sdxl-model",
         type=Path,
@@ -369,7 +370,7 @@ def main() -> None:
         analysis_seconds = 0.0
     else:
         load_started = perf_counter()
-        vlm = QwenVLMBackend(str(args.vlm_model.resolve()), max_new_tokens=500)
+        vlm = QwenVLMBackend(str(args.vlm_model.resolve()), max_new_tokens=500, load_in_4bit=args.vlm_4bit)
         load_seconds = perf_counter() - load_started
         analysis_started = perf_counter()
         features = vlm.analyze([character_image, weapon_image]).model_dump(mode="json")
