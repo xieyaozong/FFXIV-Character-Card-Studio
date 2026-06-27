@@ -14,6 +14,24 @@ Newest entries first. Each entry follows the same shape:
 
 ---
 
+## 2026-06-28 — Recognition ensemble, 8B test, anime ESRGAN upscaler
+
+**Done:** (1) Built image-embedding race recognition (CLIP head-crop kNN over the labeled
+base_character DB) after measuring that the VLM cannot read Au Ra anatomy — 97% Au Ra same-domain
+vs the VLM's 0%; cross-domain ~44% (domain gap), so it's one vote, not an oracle. (2) Ensemble that
+combines VLM traits + embedding (agree→confident, one-side→trust it, conflict→confirm). (3) Tested
+Qwen3-VL-8B (4-bit): no better than 4B on Au Ra — the ceiling is FFXIV-anatomy comprehension, not
+size; rejected for recognition. (4) Anime ESRGAN upscaler for the hi-res step.
+**Changed:** new `src/catalog/race_classifier.py`, `scripts/build_race_index.py`,
+`src/catalog/race_ensemble.py`; recognizer made false-negative-tolerant (under-detected horns/scales/
+tail don't penalize); head-zoom traits pass + `scaled_fin` vocab; `compile_generation_spec` race
+override; `--vlm-4bit`; `load_upscaler`/`esrgan_upscale` via spandrel + `--upscaler-model`; docs +
+optional `spandrel` dep; indexes/drafts git-ignored. Tests 41 pass.
+**Tech:** CLIP ViT-H embeddings, kNN, bitsandbytes NF4, spandrel/RealESRGAN-anime.
+**Impact:** race recognition is now an ensemble that's safe (never confidently wrong) and recovers
+Au Ra via vision where the VLM fails; single-image quality has an anime-grade upscale path. Open:
+intra-race feature variants (horn/tail/ear/face sub-types) — see next.
+
 ## 2026-06-25 — Gear/glamour recognition (token backstop)
 
 **Done:** Extended the recognition loop to the equipment layer: match the VLM outfit text to a

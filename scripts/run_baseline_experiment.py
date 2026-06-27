@@ -155,6 +155,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--hires-scale", type=float, default=1.5)
     parser.add_argument("--hires-strength", type=float, default=0.35)
+    parser.add_argument(
+        "--upscaler-model",
+        type=Path,
+        help="ESRGAN upscaler (e.g. RealESRGAN anime) used for the hi-res upscale step; LANCZOS if unset.",
+    )
     return parser.parse_args()
 
 
@@ -259,17 +264,45 @@ def parse_lora_specs(values: list[str]) -> list[tuple[Path, float]]:
     return specs
 
 
+def load_upscaler(model_path: Path):
+    """Load an ESRGAN-family upscaler via spandrel (clean loader, modern-torch compatible)."""
+    try:
+        from spandrel import ModelLoader
+    except ImportError as exc:
+        raise RuntimeError("pip install spandrel to use --upscaler-model.") from exc
+    import torch
+
+    return ModelLoader().load_from_file(str(model_path)).to("cuda" if torch.cuda.is_available() else "cpu").eval()
+
+
+def esrgan_upscale(image, upscaler, target: tuple[int, int]):
+    """Run the upscaler (e.g. RealESRGAN anime) then resize to the exact target — crisp anime lines."""
+    import numpy as np
+    import torch
+
+    device = next(upscaler.model.parameters()).device
+    array = np.asarray(image.convert("RGB"), dtype=np.float32) / 255.0
+    tensor = torch.from_numpy(array).permute(2, 0, 1).unsqueeze(0).to(device)
+    with torch.no_grad():
+        output = upscaler(tensor).clamp(0, 1).squeeze(0).permute(1, 2, 0).cpu().numpy()
+    upscaled = Image.fromarray((output * 255).round().astype("uint8"))
+    return upscaled.resize(target, Image.Resampling.LANCZOS)
+
+
 def hires_fix(
     pipeline, image, *, prompt, negative, ip_image, control_image, control_scale,
-    scale, strength, steps, guidance, generator,
+    scale, strength, steps, guidance, generator, upscaler=None,
 ):
     """Upscale the whole image and lightly re-render it for higher resolution and polish."""
     width, height = image.size
     target = (max(8, round(width * scale / 8) * 8), max(8, round(height * scale / 8) * 8))
+    upscaled = esrgan_upscale(image, upscaler, target) if upscaler is not None else image.resize(
+        target, Image.Resampling.LANCZOS
+    )
     kwargs = {
         "prompt": prompt,
         "negative_prompt": negative,
-        "image": image.resize(target, Image.Resampling.LANCZOS),
+        "image": upscaled,
         "strength": strength,
         "guidance_scale": guidance,
         "num_inference_steps": steps,
@@ -661,6 +694,7 @@ def main() -> None:
         generation_kwargs["controlnet_conditioning_scale"] = args.controlnet_scale
     output_image = pipeline(**generation_kwargs).images[0]
     output_image.save(output_dir / "result_base.png")
+    upscaler = load_upscaler(args.upscaler_model.resolve()) if args.upscaler_model else None
     if args.hires:
         output_image = hires_fix(
             pipeline,
@@ -675,6 +709,7 @@ def main() -> None:
             steps=args.steps,
             guidance=args.guidance_scale,
             generator=generator,
+            upscaler=upscaler,
         )
     if args.face_detail:
         face_prompt = fit_prompt_to_clip("portrait, detailed face, " + prompt_used, pipeline.tokenizer)
@@ -717,6 +752,7 @@ def main() -> None:
         "race_id": race_id,
         "gear_id": gear_id,
         "gear_reference": gear_reference,
+        "upscaler_model": str(args.upscaler_model.resolve()) if args.upscaler_model else None,
         "crop_subject": args.crop_subject,
         "crop": crop_info,
         "guidance_scale": args.guidance_scale,

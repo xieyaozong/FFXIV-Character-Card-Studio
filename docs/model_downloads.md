@@ -72,6 +72,24 @@ Then run with `--controlnet-model models\controlnet\canny-sdxl --control-preproc
 (start `--controlnet-scale 0.6`; raise to 0.7–0.8 if horns still drift). The loader tries the
 `fp16` variant first and falls back to the full-precision weights.
 
+## Upscaler (single-image quality)
+
+An anime-tuned ESRGAN sharpens the hi-res step far better than LANCZOS (crisp lines, clean fills).
+Loaded via `spandrel` (modern-torch compatible); both are optional — the pipeline falls back to
+LANCZOS if unset.
+
+```powershell
+python -m pip install spandrel
+New-Item -ItemType Directory -Force models\upscale
+Invoke-WebRequest `
+  -Uri "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth" `
+  -OutFile "models\upscale\RealESRGAN_x4plus_anime_6B.pth"
+```
+
+Then run with `--upscaler-model models\upscale\RealESRGAN_x4plus_anime_6B.pth` (the hi-res step
+upscales with ESRGAN, then a light img2img pass cleans it; lower `--hires-strength` to ~0.25 so the
+ESRGAN detail survives). The model is ~18 MB; it 4× internally then resizes to the hi-res target.
+
 ## Trigger Words
 
 | LoRA | Initial test weight | Trigger words |
