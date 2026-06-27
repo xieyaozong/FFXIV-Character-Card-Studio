@@ -24,6 +24,26 @@ modded one), pose, personality, the things they want emphasized. The architectur
 
 Lore never contributes "flavor"; it only prevents errors. Personalization is the product.
 
+### What the DB stores vs. what the screenshot supplies
+
+A sharp scope rule that keeps the knowledge base small and correct:
+
+> **The DB only stores what the screenshot can't supply or the generator tends to drop —
+> structure. Anything the screenshot already shows (colors) is read at runtime, never stored.**
+
+- **Read from the screenshot, never store:** skin tone, horn color, scale color, hair, eyes. These
+  are specific to *that* character; storing a canonical clan color would be redundant and would
+  *overwrite* the user's actual character. Perception supplies them.
+- **Store as structural invariants (the DB's real job):** presence/shape of horns, scales, ears,
+  tail — the things perception can miss and the generator silently drops. These live in
+  `required_traits` / `forbidden_traits` and are what the guardrails + ControlNet enforce.
+- **Stature / build:** a lore invariant but low priority. It mostly matters only when *multiple
+  races share one image* (relative proportions); a single-subject card rarely needs it, and it is
+  far less severe than a dropped trait like missing scales. Record as a lore note, don't prioritize.
+
+Consequence: clan/gender entries do **not** need canonical color data; race-level structural
+signatures + per-character colors-from-screenshot are enough.
+
 ### The north star (zero-prompt for the end user)
 
 An end user drops in a screenshot and gets a correct card **without typing prompts to explain anything**. The system
