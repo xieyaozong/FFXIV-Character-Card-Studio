@@ -9,7 +9,7 @@ Cleaned the project into a framework-only repository:
 - removed the unused API/UI/Docker shell
 - trimmed dependencies
 - shortened public docs
-- kept model weights, generated outputs, screenshots, and curated FFXIV data local-only
+- kept the repository focused on framework code
 
 ## 2026-06-28 - Current shape
 
@@ -24,10 +24,4 @@ Implemented:
 - expression-sheet generation
 - multi-panel card layout renderer (Path B)
 
-Still local/private:
-
-- model weights
-- LoRAs
-- race reference images
-- curated FFXIV YAML data
-- generated examples
+Kept outside this framework milestone: reference material, generated examples, and environment-specific assets.

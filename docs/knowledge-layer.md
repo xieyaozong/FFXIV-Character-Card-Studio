@@ -13,9 +13,9 @@ Examples:
 - Viera ears should not become generic elf ears.
 - Modded hair, outfit colors, poses, and personality remain user-owned choices.
 
-## Private Data
+## Local Data
 
-The public repo ships templates only. Real maintained data stays local under `knowledge/ffxiv/`:
+The framework ships templates. Maintained data can live locally under `knowledge/ffxiv/`:
 
 ```text
 anatomy_rules.yaml
@@ -26,8 +26,6 @@ reference/
 lore/
 race_index.npz
 ```
-
-These files are ignored by git because they are personal maintained data, like model weights.
 
 ## Files
 

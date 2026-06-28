@@ -9,7 +9,7 @@ pipeline to frame each reference on the character, then writes a kohya-sd-script
 dataset layout with one caption file per image and a ready training config.
 
     python scripts/prepare_character_dataset.py \
-        --input-dir private_inputs/<character>/refs \
+        --input-dir character/<character>/refs \
         --output-dir datasets/<character> \
         --trigger <character_token>
 
@@ -109,7 +109,7 @@ def main() -> None:
             print(f"  - {line}")
     print(f"caption: {caption!r}")
     print(f"next: train with kohya sd-scripts using {args.output_dir / 'train_config.toml'}")
-    print("next: train in your LoRA training workspace; keep trained weights out of git")
+    print("next: train in your LoRA training workspace")
 
 
 def write_training_config(args: argparse.Namespace, image_count: int) -> None:

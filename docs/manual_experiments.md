@@ -5,34 +5,26 @@ Use this when tuning locally from VS Code PowerShell.
 ## Run
 
 ```powershell
-cd G:\side_project\ffxiv-character-card-studio
-.\.venv\Scripts\Activate.ps1
-.\run.ps1
+python scripts\run_baseline_experiment.py `
+  --character-image "character\ffxiv_20260511_201318_995.png" `
+  --weapon-image "character\ffxiv_20260511_201348_157.png" `
+  --output-dir "outputs\experiments\manual-001" `
+  --features-only
 ```
 
-Preview the command without running models:
+Run the full local generation path after the model files are in place:
 
 ```powershell
-.\run.ps1 -DryRun
+python scripts\run_baseline_experiment.py `
+  --character-image "character\ffxiv_20260511_201318_995.png" `
+  --weapon-image "character\ffxiv_20260511_201348_157.png" `
+  --output-dir "outputs\experiments\manual-001"
 ```
 
-## Edit Here
+## Edit
 
-Open `run.ps1` and edit only the first block:
-
-- `$CharacterImage`
-- `$WeaponImage`
-- `$OutputName`
-- `$FeaturesFile`
-- `$FeaturesOnly`
-- `$Seed`
-- `$Strength`
-- `$GuidanceScale`
-- `$Steps`
-- `$ExtraPrompt`
-- `$PromptOverride`
-- `$ExtraNegative`
-- `$Loras`
+Change only the CLI values you are testing: image paths, output folder, seed, steps, strength, guidance scale, LoRA
+arguments, or extra prompt text.
 
 ## Fast Loop
 
@@ -68,7 +60,7 @@ outputs\experiments\<OutputName>\
 
 ## Knowledge Data
 
-Edit the private files directly:
+Edit the local knowledge files directly:
 
 ```text
 knowledge\ffxiv\anatomy_rules.yaml
