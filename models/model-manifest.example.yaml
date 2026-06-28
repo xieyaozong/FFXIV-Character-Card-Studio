@@ -36,6 +36,13 @@ models:
     license: apache-2.0
     required: false
 
+  - role: hand_detector_optional
+    model_id: Bingsu/adetailer
+    filename: hand_yolov8s.pt
+    path: models/detect/hand_yolov8s.pt
+    license: review-model-card
+    required: false
+
 local_weights:
   - role: ffxiv_anatomy_lora
     source: https://civitai.com/models/2541330

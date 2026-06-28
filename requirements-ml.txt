@@ -10,3 +10,4 @@ sentencepiece==0.2.1
 protobuf==7.35.1
 bitsandbytes==0.49.2
 spandrel==0.4.2
+ultralytics==8.4.80

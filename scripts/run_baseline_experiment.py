@@ -28,7 +28,9 @@ STYLE_PROMPT = (
 )
 NEGATIVE_PROMPT = (
     "photorealistic, 3d render, game screenshot, scenery, text, watermark, "
-    "extra limbs, extra fingers, missing hands, duplicate person"
+    "extra limbs, duplicate person, "
+    "bad hands, malformed hands, mutated hands, extra fingers, missing fingers, fused fingers, "
+    "bad feet, missing toes, fused toes, extra toes, deformed limbs"
 )
 
 
@@ -138,6 +140,18 @@ def parse_args() -> argparse.Namespace:
         help="Re-render the head region at high resolution and blend it back (face quality + repair).",
     )
     parser.add_argument("--face-detail-strength", type=float, default=0.5)
+    parser.add_argument(
+        "--detail-hands-feet",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Re-render feet (fixed region) and detected hands to fix SDXL anatomy errors.",
+    )
+    parser.add_argument("--hand-feet-strength", type=float, default=0.55)
+    parser.add_argument(
+        "--hand-detector",
+        type=Path,
+        help="ultralytics YOLO hand model (e.g. hand_yolov8s.pt); without it only feet are fixed.",
+    )
     parser.add_argument(
         "--expressions",
         action=argparse.BooleanOptionalAction,
@@ -334,19 +348,16 @@ def hires_fix(
     return pipeline(**kwargs).images[0]
 
 
-def detail_face(
-    pipeline, image, *, prompt, negative, ip_image, control_image, control_scale,
-    strength, steps, guidance, generator,
+def detail_region(
+    pipeline, image, box, *, prompt, negative, ip_image, control_image, control_scale,
+    strength, steps, guidance, generator, upscale_to=1024,
 ):
-    """Re-render the head region at high resolution and blend it back (mechanism 3 repair).
-
-    The face is tiny in a full-body frame, so the base model cannot render it and race anatomy
-    (horns, scales) gets suppressed. Cropping the head, upscaling, and regenerating fixes both.
-    """
-    width, height = image.size
-    box = (round(width * 0.16), 0, round(width * 0.84), round(height * 0.44))
+    """Crop a region, re-render it at high resolution, and feather it back (adetailer-style)."""
+    box = (max(0, box[0]), max(0, box[1]), min(image.width, box[2]), min(image.height, box[3]))
     crop = image.crop(box)
-    scale = 1024 / max(crop.size)
+    if min(crop.size) < 16:
+        return image
+    scale = upscale_to / max(crop.size)
     target = (max(8, round(crop.size[0] * scale / 8) * 8), max(8, round(crop.size[1] * scale / 8) * 8))
 
     kwargs = {
@@ -361,9 +372,8 @@ def detail_face(
     if ip_image is not None:
         kwargs["ip_adapter_image"] = ip_image
     if control_image is not None:
-        # Crop the control map to the same head box so the redraw keeps the horn/hair geometry.
-        head_control = control_image.resize(image.size, Image.Resampling.LANCZOS).crop(box)
-        kwargs["control_image"] = head_control.resize(target, Image.Resampling.LANCZOS)
+        region_control = control_image.resize(image.size, Image.Resampling.LANCZOS).crop(box)
+        kwargs["control_image"] = region_control.resize(target, Image.Resampling.LANCZOS)
         kwargs["controlnet_conditioning_scale"] = control_scale
     detailed = pipeline(**kwargs).images[0].resize(crop.size, Image.Resampling.LANCZOS)
 
@@ -376,6 +386,52 @@ def detail_face(
     result = image.copy()
     result.paste(detailed, box[:2], mask)
     return result
+
+
+def detail_face(pipeline, image, **kwargs):
+    """Re-render the head region (race anatomy + face quality). Thin wrapper over detail_region."""
+    width, height = image.size
+    box = (round(width * 0.16), 0, round(width * 0.84), round(height * 0.44))
+    return detail_region(pipeline, image, box, **kwargs)
+
+
+def detect_boxes(image, model_path, *, conf=0.3, pad=0.18):
+    """Detect object boxes (e.g. hands) with an ultralytics YOLO model; padded, original coords."""
+    from ultralytics import YOLO
+
+    result = YOLO(str(model_path)).predict(image, conf=conf, verbose=False)[0]
+    boxes = []
+    for x0, y0, x1, y1 in result.boxes.xyxy.cpu().numpy():
+        bw, bh = x1 - x0, y1 - y0
+        boxes.append((int(x0 - bw * pad), int(y0 - bh * pad), int(x1 + bw * pad), int(y1 + bh * pad)))
+    return boxes
+
+
+def detail_hands_feet(
+    pipeline, image, *, base_prompt, negative, ip_image, control_image, control_scale,
+    strength, steps, guidance, generator, tokenizer, hand_detector=None,
+):
+    """Fix the worst SDXL anatomy: re-render feet (fixed bottom region) and detected hands."""
+    out = image
+    width, height = image.size
+    feet_box = (round(width * 0.20), round(height * 0.82), round(width * 0.80), height)
+    feet_prompt = fit_prompt_to_clip(f"detailed feet, anatomically correct toes, {base_prompt}", tokenizer)
+    out = detail_region(
+        pipeline, out, feet_box, prompt=feet_prompt, negative=negative, ip_image=ip_image,
+        control_image=control_image, control_scale=control_scale, strength=strength,
+        steps=steps, guidance=guidance, generator=generator, upscale_to=768,
+    )
+    if hand_detector is not None and Path(hand_detector).is_file():
+        hand_prompt = fit_prompt_to_clip(
+            f"detailed hand, five fingers, anatomically correct hand, {base_prompt}", tokenizer
+        )
+        for box in detect_boxes(out, hand_detector):
+            out = detail_region(
+                pipeline, out, box, prompt=hand_prompt, negative=negative, ip_image=ip_image,
+                control_image=control_image, control_scale=control_scale, strength=strength,
+                steps=steps, guidance=guidance, generator=generator, upscale_to=768,
+            )
+    return out
 
 
 # Card expression sheet: label -> English expression phrase injected into the head prompt.
@@ -800,6 +856,22 @@ def main() -> None:
             steps=args.steps,
             guidance=args.guidance_scale,
             generator=generator,
+        )
+    if args.detail_hands_feet:
+        output_image = detail_hands_feet(
+            pipeline,
+            output_image,
+            base_prompt=prompt_used,
+            negative=negative_used,
+            ip_image=ip_adapter_image,
+            control_image=control_image,
+            control_scale=args.controlnet_scale,
+            strength=args.hand_feet_strength,
+            steps=args.steps,
+            guidance=args.guidance_scale,
+            generator=generator,
+            tokenizer=pipeline.tokenizer,
+            hand_detector=args.hand_detector,
         )
     output_image.save(output_dir / "result.png")
 

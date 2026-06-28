@@ -58,6 +58,22 @@ Results are written to:
 outputs\experiments\<OutputName>\
 ```
 
+## Hand Detailer
+
+Install the optional detector once:
+
+```powershell
+python -m pip install ultralytics
+New-Item -ItemType Directory -Force models\detect
+.\.venv\Scripts\hf.exe download Bingsu/adetailer hand_yolov8s.pt --local-dir models\detect
+```
+
+Then add:
+
+```powershell
+--detail-hands-feet --hand-detector models\detect\hand_yolov8s.pt
+```
+
 ## Knowledge Data
 
 Edit the local knowledge files directly:
