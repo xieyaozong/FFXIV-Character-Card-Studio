@@ -20,7 +20,7 @@ def main() -> None:
     from src.preprocessing.palette import extract_palette
     from src.rendering.card_layout import CardSpec, Panel, render_card
 
-    run = PROJECT_ROOT / "outputs/experiments/expr-002"
+    run = PROJECT_ROOT / "outputs/experiments/auto-aura-001"
     hero = Image.open(run / "result.png").convert("RGB")
     fg_path = run / "input_foreground.png"
     w, h = hero.size

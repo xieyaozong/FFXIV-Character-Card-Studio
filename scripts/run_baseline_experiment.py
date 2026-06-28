@@ -23,11 +23,15 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
-STYLE_PROMPT = (
-    "hand-drawn anime character sheet, black ink linework, colored pencil, white paper, full body"
-)
+# Style is the USER's choice (their style LoRA + trigger word + --style-prompt), never forced by
+# the architecture — a photorealistic real-person LoRA must be just as valid as an anime one. So
+# the default carries only style-agnostic "completion" terms: full body framing + quality, with no
+# medium/look words. Override per run with --style-prompt.
+STYLE_PROMPT = "best quality, highly detailed, full body"
+# Negatives are style-agnostic too: only anatomy/quality defects and artifacts, never a particular
+# look. (No "photorealistic"/"3d render"/"game screenshot" here — those are valid target styles.)
 NEGATIVE_PROMPT = (
-    "photorealistic, 3d render, game screenshot, scenery, text, watermark, "
+    "lowres, worst quality, text, watermark, signature, "
     "extra limbs, duplicate person, "
     "bad hands, malformed hands, mutated hands, extra fingers, missing fingers, fused fingers, "
     "bad feet, missing toes, fused toes, extra toes, deformed limbs"
@@ -36,7 +40,16 @@ NEGATIVE_PROMPT = (
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the first local FFXIV character-card baseline experiment.")
-    parser.add_argument("--character-image", type=Path, required=True)
+    parser.add_argument(
+        "--character-image",
+        type=Path,
+        action="append",
+        required=True,
+        metavar="PATH",
+        help="Character screenshot. Repeat for multiple angles — features are merged (union) across "
+        "them so an occluded part (glove under smoke, horns under a hat) is filled from another shot. "
+        "The FIRST image drives pose / img2img init / ControlNet.",
+    )
     parser.add_argument("--weapon-image", type=Path, required=True)
     parser.add_argument("--vlm-model", type=Path, default=Path("models/vlm/Qwen3-VL-4B-Instruct"))
     parser.add_argument("--vlm-4bit", action="store_true", help="Load the VLM in 4-bit (needed to fit the 8B in 16GB).")
@@ -58,6 +71,12 @@ def parse_args() -> argparse.Namespace:
         help="Load a LoRA adapter. Repeat this option to combine adapters.",
     )
     parser.add_argument("--extra-prompt", default="")
+    parser.add_argument(
+        "--style-prompt",
+        default=STYLE_PROMPT,
+        help="Style/look layer (the user's choice). Defaults to style-agnostic completion terms; "
+        "set this to drive any look — anime, photoreal, painterly — alongside the chosen style LoRA.",
+    )
     parser.add_argument("--prompt-override", default="")
     parser.add_argument("--extra-negative", default="")
     parser.add_argument("--output-dir", type=Path, default=Path("outputs/experiments/baseline-001"))
@@ -141,16 +160,23 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--face-detail-strength", type=float, default=0.5)
     parser.add_argument(
-        "--detail-hands-feet",
+        "--detail-hands",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Re-render feet (fixed region) and detected hands to fix SDXL anatomy errors.",
+        help="Repair YOLO-detected hands (img2img locked to the screenshot's correct hand silhouette).",
+    )
+    parser.add_argument(
+        "--detail-feet",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Repair the feet region. Content-aware: redraws the actual footwear (boots/shoes) the "
+        "character wears, or bare feet with toes if barefoot. Off by default — only enable on a real defect.",
     )
     parser.add_argument("--hand-feet-strength", type=float, default=0.55)
     parser.add_argument(
         "--hand-detector",
         type=Path,
-        help="ultralytics YOLO hand model (e.g. hand_yolov8s.pt); without it only feet are fixed.",
+        help="ultralytics YOLO hand model (e.g. hand_yolov8s.pt) used by --detail-hands.",
     )
     parser.add_argument(
         "--expressions",
@@ -195,9 +221,41 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+# Values that mean "no such feature / not shown" — these must never become prompt terms.
+NON_VISIBLE_VALUES = {"none", "absent", "occluded", "not visible", "n/a", "unknown", ""}
+
+# identity keys that name a body feature: their value is just a descriptor, so append the noun
+# (e.g. {"horns": "white"} -> "white horns"). Keys not listed here carry self-describing values
+# (e.g. headwear "black cap", accessory "yellow headphones") and are added as-is.
+IDENTITY_NOUNS = {
+    "hair_color": "hair",
+    "hair": "hair",
+    "skin_tone": "skin",
+    "skin": "skin",
+    "eye_color": "eyes",
+    "eyes": "eyes",
+    "horns": "horns",
+    "horn_color": "horns",
+    "ears": "ears",
+    "tail": "tail",
+    "tail_color": "tail",
+    "scales": "scales",
+    "glasses": "sunglasses",
+    "glasses_color": "sunglasses",
+}
+
+# Garment nouns: if an outfit value already contains one, it names its own garment, so we don't
+# append the slot key (avoids "black t-shirt ... top").
+GARMENT_WORDS = (
+    "shirt", "t-shirt", "tee", "jacket", "coat", "hoodie", "sweater", "dress", "skirt", "shorts",
+    "pants", "trousers", "jeans", "leggings", "stockings", "glove", "boot", "shoe", "sock", "top",
+    "cape", "cloak", "robe", "armor", "armour", "scarf", "belt", "vest", "suit", "bodysuit",
+)
+
+
 def is_visible(value: str) -> bool:
-    normalized = value.lower().replace("_", " ")
-    return "not visible" not in normalized
+    normalized = value.strip().strip(".").lower().replace("_", " ")
+    return normalized not in NON_VISIBLE_VALUES and "not visible" not in normalized
 
 
 def primary_clause(value: str) -> str:
@@ -206,9 +264,14 @@ def primary_clause(value: str) -> str:
 
 
 def content_terms(features: dict[str, object]) -> list[str]:
-    identity = {item["key"]: str(item["value"]) for item in features["identity"]}
-    outfit = {item["key"]: str(item["value"]) for item in features["outfit"]}
+    """Flatten the VLM's identity + outfit lists into prompt terms.
 
+    The VLM now keys identity by feature (hair_color, horns, glasses, headwear, accessory, ...) and
+    outfit by garment slot (jacket, top, shorts, boots, ...), with self-describing values. So we
+    iterate every entry rather than looking up fixed keys: body-feature keys get their noun appended,
+    everything else (which already names itself) is added verbatim. Identity comes first so CLIP
+    trimming drops garments before core identity.
+    """
     terms: list[str] = []
     seen: set[str] = set()
 
@@ -218,46 +281,27 @@ def content_terms(features: dict[str, object]) -> list[str]:
             seen.add(term.casefold())
             terms.append(term)
 
-    # Core identity first so any later trimming drops the least important details.
-    labels = {
-        "hair_color": "hair",
-        "horns": "horns",
-        "horn_color": "horns",
-        "tail": "tail",
-        "tail_color": "tail",
-        "glasses": "sunglasses",
-        "glasses_color": "sunglasses",
-        "skin": "skin",
-        "skin_color": "skin",
-    }
-    for key, label in labels.items():
-        value = identity.get(key)
-        if value and is_visible(value):
-            value = primary_clause(value)
-            add(value if label in value.lower() else f"{value} {label}")
+    for item in features.get("identity", []):
+        value = str(item["value"])
+        if not is_visible(value):
+            continue
+        value = primary_clause(value)
+        if not is_visible(value):
+            continue
+        noun = IDENTITY_NOUNS.get(str(item["key"]).lower())
+        add(value if not noun or noun in value.lower() else f"{value} {noun}")
 
-    # The VLM may file headwear/glasses under identity or outfit; check both.
-    headwear = identity.get("headwear") or outfit.get("headwear")
-    if headwear and is_visible(headwear):
-        add(primary_clause(headwear))
-    glasses = outfit.get("glasses")
-    if glasses and is_visible(glasses):
-        glasses = primary_clause(glasses)
-        add(glasses if "glass" in glasses.lower() else f"{glasses} sunglasses")
-
-    # Construction already names colors, so use it and skip the redundant color summary.
-    construction = outfit.get("clothing_construction")
-    colors = outfit.get("clothing_colors") or outfit.get("clothing_color")
-    if construction and is_visible(construction):
-        for piece in construction.split(","):
-            add(piece)
-    elif colors and is_visible(colors):
-        add(f"{colors} outfit")
-
-    accessories = outfit.get("accessories", "")
-    for item in accessories.split(","):
-        if any(name in item.lower() for name in ("headphone", "glove")):
-            add(item)
+    for item in features.get("outfit", []):
+        value = str(item["value"])
+        if not is_visible(value):
+            continue
+        value = primary_clause(value)
+        # Terse values like shorts="gray" lose the garment noun; append the slot key when the value
+        # names no garment itself (but not when it already says t-shirt/jacket/etc.).
+        key = str(item["key"]).lower()
+        if not any(word in value.lower() for word in GARMENT_WORDS):
+            value = f"{value} {key}".strip()
+        add(value)
 
     return terms
 
@@ -407,30 +451,119 @@ def detect_boxes(image, model_path, *, conf=0.3, pad=0.18):
     return boxes
 
 
+def make_inpaint_pipeline(pipeline):
+    """Build an SDXL inpaint pipeline from an existing pipeline's components (no extra VRAM).
+
+    Reuses the already-loaded VAE/UNet/text-encoders, so the inpaint pass costs nothing extra to
+    load. Deliberately drops the ControlNet: the feet area has no usable edges in the control map
+    (bare feet on a pale floor), so conditioning on it just reproduces the "nothing there" stumps.
+    Inpaint lets the model repaint that region freely from the surrounding leg context instead.
+    """
+    from diffusers import StableDiffusionXLInpaintPipeline
+
+    return StableDiffusionXLInpaintPipeline(
+        vae=pipeline.vae,
+        text_encoder=pipeline.text_encoder,
+        text_encoder_2=pipeline.text_encoder_2,
+        tokenizer=pipeline.tokenizer,
+        tokenizer_2=pipeline.tokenizer_2,
+        unet=pipeline.unet,
+        scheduler=pipeline.scheduler,
+    )
+
+
+def inpaint_region(
+    inpaint_pipeline, image, box, mask_box, *, prompt, negative,
+    strength, steps, guidance, generator, upscale_to=1024,
+):
+    """Crop a region, repaint only the masked sub-area from scratch, feather it back.
+
+    Unlike detail_region (img2img, which preserves the init and so cannot add what is missing),
+    this masks `mask_box` and inpaints it, so missing feet/toes are drawn anew. `box` carries
+    surrounding context (the legs) that the model grows the anatomy from; `mask_box` (relative to
+    `box`) is the part actually repainted.
+    """
+    box = (max(0, box[0]), max(0, box[1]), min(image.width, box[2]), min(image.height, box[3]))
+    crop = image.crop(box)
+    if min(crop.size) < 16:
+        return image
+    scale = upscale_to / max(crop.size)
+    target = (max(8, round(crop.size[0] * scale / 8) * 8), max(8, round(crop.size[1] * scale / 8) * 8))
+    crop_up = crop.resize(target, Image.Resampling.LANCZOS)
+
+    # Mask (in crop coordinates): white = repaint, feathered so the seam with the legs is soft.
+    mask = Image.new("L", crop.size, 0)
+    mask.paste(255, (mask_box[0], mask_box[1], mask_box[2], mask_box[3]))
+    mask = mask.filter(ImageFilter.GaussianBlur(radius=max(crop.size) // 24 + 1))
+    mask_up = mask.resize(target, Image.Resampling.LANCZOS)
+
+    repainted = inpaint_pipeline(
+        prompt=prompt,
+        negative_prompt=negative,
+        image=crop_up,
+        mask_image=mask_up,
+        strength=strength,
+        guidance_scale=guidance,
+        num_inference_steps=steps,
+        generator=generator,
+    ).images[0].resize(crop.size, Image.Resampling.LANCZOS)
+
+    result = image.copy()
+    result.paste(repainted, box[:2], mask)
+    return result
+
+
 def detail_hands_feet(
     pipeline, image, *, base_prompt, negative, ip_image, control_image, control_scale,
     strength, steps, guidance, generator, tokenizer, hand_detector=None,
+    repair_hands=True, repair_feet=False, footwear=None, glove=None,
 ):
-    """Fix the worst SDXL anatomy: re-render feet (fixed bottom region) and detected hands."""
+    """Content-aware anatomy repair: detected hands (img2img) and, optionally, the feet (inpaint).
+
+    Each pass is independent and opt-in so a good region is never "repaired" into a worse one:
+    - Hands stay on img2img locked to the screenshot's correct hand edges with a HIGH ControlNet
+      scale, so a badly-drawn hand is pulled back to the real silhouette while keeping its grip on a
+      weapon (a full repaint would drop the weapon). The prompt names the actual glove if worn.
+    - Feet use a control-free inpaint (the feet area has no usable control edges). It is content-aware:
+      it redraws the ACTUAL footwear the character wears (e.g. boots) rather than assuming bare feet,
+      so it does not turn boots into toed stumps. Off by default; enable only on a real foot defect.
+    """
     out = image
     width, height = image.size
-    feet_box = (round(width * 0.20), round(height * 0.82), round(width * 0.80), height)
-    feet_prompt = fit_prompt_to_clip(f"detailed feet, anatomically correct toes, {base_prompt}", tokenizer)
-    out = detail_region(
-        pipeline, out, feet_box, prompt=feet_prompt, negative=negative, ip_image=ip_image,
-        control_image=control_image, control_scale=control_scale, strength=strength,
-        steps=steps, guidance=guidance, generator=generator, upscale_to=768,
-    )
-    if hand_detector is not None and Path(hand_detector).is_file():
+    # Lock to the screenshot's correct hand silhouette (much higher than the base scale).
+    lock_scale = min(1.0, max(control_scale, 0.85)) if control_image is not None else control_scale
+
+    if repair_hands and hand_detector is not None and Path(hand_detector).is_file():
+        hand_desc = f"detailed {glove}" if glove else "detailed bare hand"
         hand_prompt = fit_prompt_to_clip(
-            f"detailed hand, five fingers, anatomically correct hand, {base_prompt}", tokenizer
+            f"{hand_desc}, five fingers, anatomically correct hand gripping, {base_prompt}", tokenizer
         )
         for box in detect_boxes(out, hand_detector):
             out = detail_region(
                 pipeline, out, box, prompt=hand_prompt, negative=negative, ip_image=ip_image,
-                control_image=control_image, control_scale=control_scale, strength=strength,
+                control_image=control_image, control_scale=lock_scale, strength=strength,
                 steps=steps, guidance=guidance, generator=generator, upscale_to=768,
             )
+
+    if repair_feet:
+        # Box carries the lower legs as context; only the lower portion is masked and repainted, so
+        # the model grows the footwear/feet off the leg above. Describe the real footwear so a booted
+        # character stays booted.
+        feet_desc = footwear if footwear else "bare feet with five toes, anatomically correct feet"
+        feet_box = (round(width * 0.14), round(height * 0.58), round(width * 0.86), height)
+        fb_w, fb_h = feet_box[2] - feet_box[0], feet_box[3] - feet_box[1]
+        feet_mask = (round(fb_w * 0.04), round(fb_h * 0.45), round(fb_w * 0.96), fb_h)
+        feet_prompt = fit_prompt_to_clip(
+            f"{feet_desc}, ankles, legs, feet on the ground, plain white background, {base_prompt}",
+            tokenizer,
+        )
+        inpaint_pipeline = make_inpaint_pipeline(pipeline)
+        out = inpaint_region(
+            inpaint_pipeline, out, feet_box, feet_mask, prompt=feet_prompt, negative=negative,
+            strength=max(strength, 0.9), steps=steps, guidance=guidance, generator=generator,
+            upscale_to=1024,
+        )
+
     return out
 
 
@@ -496,26 +629,33 @@ def main() -> None:
     output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    character_image = Image.open(args.character_image).convert("RGB")
+    character_images = [Image.open(path).convert("RGB") for path in args.character_image]
     weapon_image = Image.open(args.weapon_image).convert("RGB")
 
     crop_info: dict[str, object] = {}
     if args.crop_subject:
-        for label, image in (("character", character_image), ("weapon", weapon_image)):
+        weapon_result = triage_image(weapon_image, mask_backend=args.crop_backend)
+        weapon_image = crop_subject(weapon_image, weapon_result, pad_ratio=args.crop_pad)
+        weapon_image.save(output_dir / "input_weapon_crop.png")
+        crop_info["weapon"] = {
+            "usable": weapon_result.usable, "score": weapon_result.score,
+            "reasons": weapon_result.reasons, "bbox": weapon_result.bbox,
+        }
+        cropped_characters = []
+        for index, image in enumerate(character_images):
             result = triage_image(image, mask_backend=args.crop_backend)
             cropped = crop_subject(image, result, pad_ratio=args.crop_pad)
-            cropped.save(output_dir / f"input_{label}_crop.png")
-            crop_info[label] = {
-                "usable": result.usable,
-                "score": result.score,
-                "reasons": result.reasons,
-                "bbox": result.bbox,
+            suffix = "" if index == 0 else f"_{index}"
+            cropped.save(output_dir / f"input_character{suffix}_crop.png")
+            crop_info[f"character{suffix}"] = {
+                "usable": result.usable, "score": result.score,
+                "reasons": result.reasons, "bbox": result.bbox,
             }
-            if label == "character":
-                character_image = cropped
-            else:
-                weapon_image = cropped
+            cropped_characters.append(cropped)
+        character_images = cropped_characters
 
+    # The first image is the primary: it drives the img2img init + ControlNet (pose/structure).
+    character_image = character_images[0]
     foreground = remove_background(character_image, args.background_backend)
     foreground.save(output_dir / "input_foreground.png")
     white_background = Image.new("RGBA", foreground.size, "white")
@@ -528,26 +668,44 @@ def main() -> None:
         analysis_seconds = 0.0
     else:
         load_started = perf_counter()
-        vlm = QwenVLMBackend(str(args.vlm_model.resolve()), max_new_tokens=500, load_in_4bit=args.vlm_4bit)
+        vlm = QwenVLMBackend(str(args.vlm_model.resolve()), max_new_tokens=1024, load_in_4bit=args.vlm_4bit)
         load_seconds = perf_counter() - load_started
         analysis_started = perf_counter()
-        features = vlm.analyze([character_image, weapon_image]).model_dump(mode="json")
-        if args.head_zoom_traits:
+        raw_per_image: list[str | None] = []
+        try:
             from src.domain.models import RaceTraits
-            from src.vlm.feature_merger import merge_head_traits
+            from src.vlm.feature_merger import merge_feature_responses, merge_head_traits
 
-            cw, ch = character_image.size
-            # Keep near-full width so side-protruding horns/fin-ears are not cropped off.
-            head_crop = character_image.crop((round(cw * 0.05), 0, round(cw * 0.95), round(ch * 0.45)))
-            head_crop.save(output_dir / "head_zoom.png")
-            head_traits = vlm.extract_traits(head_crop)
-            full_traits = RaceTraits.model_validate(features.get("traits", {}))
-            merged = merge_head_traits(full_traits, head_traits)
-            features["traits"] = merged.model_dump(mode="json")
-            print(
-                f"head-zoom traits: horns={head_traits.horns} ear={head_traits.ear_type} "
-                f"scales={head_traits.scales} face={head_traits.face_type} "
-                f"(full had horns={full_traits.horns})"
+            # One pass per angle (weapon stays as image_2 context each time), then union the readings
+            # so a part hidden in one shot is recovered from another.
+            responses = []
+            for image in character_images:
+                responses.append(vlm.analyze([image, weapon_image]))
+                raw_per_image.append(vlm.last_raw_response)
+            merged_response = merge_feature_responses(responses)
+            features = merged_response.model_dump(mode="json")
+            if len(character_images) > 1:
+                print(f"merged features from {len(character_images)} character images")
+            if args.head_zoom_traits:
+                cw, ch = character_image.size
+                # Keep near-full width so side-protruding horns/fin-ears are not cropped off.
+                head_crop = character_image.crop((round(cw * 0.05), 0, round(cw * 0.95), round(ch * 0.45)))
+                head_crop.save(output_dir / "head_zoom.png")
+                head_traits = vlm.extract_traits(head_crop)
+                full_traits = RaceTraits.model_validate(features.get("traits", {}))
+                merged = merge_head_traits(full_traits, head_traits)
+                features["traits"] = merged.model_dump(mode="json")
+                print(
+                    f"head-zoom traits: horns={head_traits.horns} ear={head_traits.ear_type} "
+                    f"scales={head_traits.scales} face={head_traits.face_type} "
+                    f"(full had horns={full_traits.horns})"
+                )
+        finally:
+            # Always dump the raw VLM text (pre-parse), even if validation failed, so a bad
+            # response can be diagnosed without re-running the model.
+            raw_dump = {"feature_extraction_per_image": raw_per_image, "head_traits": vlm.last_raw_traits}
+            (output_dir / "vlm_raw.json").write_text(
+                json.dumps(raw_dump, ensure_ascii=False, indent=2), encoding="utf-8"
             )
         analysis_seconds = perf_counter() - analysis_started
         del vlm
@@ -581,6 +739,15 @@ def main() -> None:
             if gear.negative_prompt:
                 negative_prompt = ", ".join(part for part in (negative_prompt, *gear.negative_prompt) if part)
             print(f"recognized gear: {gear_id} (matched: {', '.join(gear_match.matched)})")
+
+    # Anchor the held weapon in the prompt (a reproduction target). Done after gear matching so the
+    # weapon description never perturbs gear recognition.
+    weapon = features.get("weapon") or {}
+    if weapon.get("include"):
+        for candidate in weapon.get("candidates", []):
+            value = primary_clause(str(candidate.get("value", "")))
+            if is_visible(value) and value.casefold() not in {t.casefold() for t in terms}:
+                terms.append(value)
 
     guardrails_on = (
         args.guardrails
@@ -628,7 +795,7 @@ def main() -> None:
 
         spec = compile_generation_spec(
             content_terms=terms,
-            style_prompt=STYLE_PROMPT,
+            style_prompt=args.style_prompt,
             base_negative=negative_prompt,
             traits=traits_obj,
             race_signatures=signatures,
@@ -666,7 +833,7 @@ def main() -> None:
                 print(f"  auto-loaded reference image: {reference}")
     else:
         body = ", ".join(terms)
-        prompt = ", ".join(part for part in (args.extra_prompt, STYLE_PROMPT, body) if part)
+        prompt = ", ".join(part for part in (args.extra_prompt, args.style_prompt, body) if part)
     (output_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
     if args.features_only:
         timings = {
@@ -697,6 +864,22 @@ def main() -> None:
     if args.controlnet_model:
         if args.control_image:
             control_image = Image.open(args.control_image).convert("RGB")
+        elif args.control_preprocessor == "canny":
+            from src.preprocessing.control_images import build_control_image
+
+            # Canny from the WITH-BACKGROUND crop: background removal erases a held weapon / the hand
+            # gripping it (glow + smoke confuse it), which then has no control edges and gets
+            # reinvented. The dilated foreground silhouette keeps the subject + adjacent weapon edges
+            # while dropping distant scene clutter.
+            control_source = ImageOps.pad(
+                character_image, (768, 1024), method=Image.Resampling.LANCZOS,
+                color="white", centering=(0.5, 0.5),
+            )
+            keep_mask = ImageOps.pad(
+                foreground.split()[-1], (768, 1024), method=Image.Resampling.LANCZOS,
+                color=0, centering=(0.5, 0.5),
+            )
+            control_image = build_control_image(control_source, "canny", keep_mask=keep_mask)
         else:
             from src.preprocessing.control_images import build_control_image
 
@@ -857,7 +1040,15 @@ def main() -> None:
             guidance=args.guidance_scale,
             generator=generator,
         )
-    if args.detail_hands_feet:
+    if args.detail_hands or args.detail_feet:
+        # Pull the actual footwear / glove descriptions from the recognized features so the repair
+        # redraws what the character really wears (boots stay boots) instead of a hardcoded guess.
+        garment_terms = content_terms(features)
+        footwear = next(
+            (t for t in garment_terms if any(w in t.lower() for w in ("boot", "shoe", "sandal", "heel", "sneaker"))),
+            None,
+        )
+        glove = next((t for t in garment_terms if "glove" in t.lower()), None)
         output_image = detail_hands_feet(
             pipeline,
             output_image,
@@ -872,6 +1063,10 @@ def main() -> None:
             generator=generator,
             tokenizer=pipeline.tokenizer,
             hand_detector=args.hand_detector,
+            repair_hands=args.detail_hands,
+            repair_feet=args.detail_feet,
+            footwear=footwear,
+            glove=glove,
         )
     output_image.save(output_dir / "result.png")
 
@@ -899,7 +1094,7 @@ def main() -> None:
     generation_seconds = perf_counter() - generation_started
 
     metadata = {
-        "character_image": str(args.character_image.resolve()),
+        "character_image": [str(path.resolve()) for path in args.character_image],
         "weapon_image": str(args.weapon_image.resolve()),
         "vlm_model": str(args.vlm_model.resolve()),
         "sdxl_model": str(args.sdxl_model.resolve()),

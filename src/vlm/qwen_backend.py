@@ -58,6 +58,9 @@ class QwenVLMBackend:
         self.processor = AutoProcessor.from_pretrained(model_id)
         self.model = QwenVLModel.from_pretrained(model_id, **kwargs)
         self.max_new_tokens = max_new_tokens
+        # Raw decoded responses, kept for diagnostics (the runner dumps them next to features.json).
+        self.last_raw_response: str | None = None
+        self.last_raw_traits: str | None = None
 
     def _generate(self, images: list[Image.Image], prompt: str, max_new_tokens: int) -> str:
         messages = [
@@ -80,6 +83,7 @@ class QwenVLMBackend:
         """Second pass on a zoomed head crop, where small/pale horns and faint scales are legible."""
         prepared = prepare_vlm_images([image])
         response = self._generate(prepared, TRAITS_EXTRACTION_PROMPT, max_new_tokens=200)
+        self.last_raw_traits = response
         return RaceTraits.model_validate(extract_json(response))
 
     def analyze(self, images: list[Image.Image]) -> VLMFeatureResponse:
@@ -99,6 +103,7 @@ class QwenVLMBackend:
         generated = self.model.generate(**inputs, max_new_tokens=self.max_new_tokens, do_sample=False)
         trimmed = [output[len(source) :] for source, output in zip(inputs.input_ids, generated, strict=True)]
         response = self.processor.batch_decode(trimmed, skip_special_tokens=True)[0]
+        self.last_raw_response = response
         result = VLMFeatureResponse.model_validate(extract_json(response))
         result.identity = [
             item for item in result.identity if "not visible" not in item.value.lower().replace("_", " ")

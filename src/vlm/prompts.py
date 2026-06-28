@@ -20,60 +20,45 @@ always set tail_type and stature to "occluded". Return only the JSON object. Do 
 """.strip()
 
 FEATURE_EXTRACTION_PROMPT = """
-Analyze only visible evidence in the supplied character screenshots. Images are numbered image_1, image_2, and so on.
-Report what you SEE. Do not infer game lore and do not name the race.
-Return only one JSON object using this exact shape:
+Analyze ONLY what is visible in the supplied character screenshots. Images are numbered image_1, image_2, and so on.
+Report what you SEE in THIS image. Do not infer game lore and do not name the race.
+
+Return ONE JSON object with exactly the keys below. Every value written as <...> is a PLACEHOLDER telling you what
+to put there — replace each one with your own observation of the actual character. Do NOT output the placeholder text,
+and do NOT copy these example strings; they are a form to fill in, not an answer.
 {
   "traits": {
-    "ear_type": "human",
-    "horns": "absent",
-    "scales": "absent",
-    "tail_type": "none",
-    "stature": "average",
-    "face_type": "human"
+    "ear_type": "<one of: human | long_pointed | feline | rabbit_long | leonine | scaled_fin | occluded>",
+    "horns": "<one of: present | absent | occluded>",
+    "scales": "<one of: face | body | absent | occluded>",
+    "tail_type": "<one of: scaled | feline_furred | none | occluded>",
+    "stature": "<one of: child_short | average | large_tall | occluded>",
+    "face_type": "<one of: human | feline_muzzle | occluded>"
   },
   "identity": [
-    {
-      "key": "hair_color",
-      "value": "black",
-      "confidence": 0.95
-    }
+    {"key": "<feature name, e.g. hair_color / eye_color / skin_tone / horns / ears / tail / glasses / headwear / accessory>",
+     "value": "<concise description of what you actually see>", "confidence": <number 0.0-1.0>}
   ],
-  "outfit": [],
-  "job": {
-    "include": false,
-    "status": "not_visible"
-  },
-  "weapon": {
-    "include": true,
-    "status": "detected",
-    "candidates": [
-      {
-        "key": "weapon_type",
-        "value": "large edged weapon",
-        "confidence": 0.8
-      }
-    ]
-  }
+  "outfit": [
+    {"key": "<garment slot, e.g. jacket / top / shorts / gloves / boots>",
+     "value": "<colors + construction of that garment>", "confidence": <number 0.0-1.0>}
+  ],
+  "job": {"include": <true or false>, "status": "<detected | uncertain | not_visible | confirmed_none | user_added>"},
+  "weapon": {"include": <true or false>,
+    "status": "<detected | uncertain | not_visible | confirmed_none | user_added>",
+    "candidates": [{"key": "weapon_type", "value": "<shape/description you see>", "confidence": <number 0.0-1.0>}]}
 }
-The "traits" object is required. For each field choose exactly one allowed value:
-- ear_type: human, long_pointed, feline, rabbit_long, leonine, scaled_fin, occluded
-- horns: present, absent, occluded
-- scales: face, body, absent, occluded
-- tail_type: scaled, feline_furred, none, occluded
-- stature: child_short, average, large_tall, occluded
-- face_type: human, feline_muzzle, occluded
-Report fin-shaped or scaled side-of-head ear structures as scaled_fin.
-Look carefully before choosing each trait: small horns near the hairline or beside a hat, subtle scales on the cheeks
-or neck, and a thin or short tail are easy to miss. Inspect the head, sides of the face, neck, and lower body. Prefer
-"occluded" over "absent" or "none" when a hat, hair, pose, or framing hides the region, or when you are unsure; use
-"absent" or "none" only when the region is clearly visible and the feature is truly not there. Judge from image_1.
 
-Allowed status values are detected, uncertain, not_visible, confirmed_none, and user_added. In identity and outfit list
-every visible feature: hair, eyes, skin, any horns, ears, or tail, glasses, headwear, accessories, clothing colors, and
-clothing construction. Do not return a minimal list. When you note horns, scales, or a tail in identity, the matching
-traits field must agree. Omit an identity or outfit entry only when its value is not visible. Do not infer a job from
-weapon shape alone; set job include to false unless a job name, icon, or other direct evidence is visible. Use concise
-English visual descriptions. Image 1 is the clean character reference; image 2 provides weapon or job context. Do not
-use Markdown.
+Rules:
+- "identity" MUST enumerate EVERY visible feature: hair, eyes, skin, any horns / ears / tail, glasses, headwear, and
+  accessories. "outfit" MUST enumerate EVERY visible garment with its colors and construction. The character is fully
+  visible here, so a near-empty identity or an empty outfit is almost always WRONG — look again and list each item.
+- Look carefully for easily-missed details: small horns near the hairline or beside a hat, subtle scales on the cheeks
+  or neck, a thin or short tail. Report fin-shaped or scaled side-of-head ear structures as scaled_fin.
+- Use "occluded" / "none" when a hat, hair, pose, or framing hides a region; use "absent" / "none" only when the region
+  is clearly visible and the feature truly is not there. When you list horns, scales, or a tail in identity, the matching
+  traits value must agree.
+- Do not infer a job from weapon shape alone; set job include to false unless a job name or icon is visible.
+- Judge traits and identity from image_1; image_2 provides weapon or job context. Use concise English. Output ONLY the
+  JSON object — no Markdown, no commentary.
 """.strip()
