@@ -134,6 +134,19 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--face-detail-strength", type=float, default=0.5)
     parser.add_argument(
+        "--expressions",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Generate the card's expression sheet (6 head panels with different expressions).",
+    )
+    parser.add_argument("--expression-strength", type=float, default=0.55)
+    parser.add_argument(
+        "--expression-control-scale",
+        type=float,
+        default=0.2,
+        help="ControlNet scale for expression panels — kept low so the expression can change.",
+    )
+    parser.add_argument(
         "--controlnet-model",
         type=Path,
         help="ControlNet folder. Set to pin geometry (horns/hair/pose) from the screenshot.",
@@ -358,6 +371,57 @@ def detail_face(
     result = image.copy()
     result.paste(detailed, box[:2], mask)
     return result
+
+
+# Card expression sheet: label -> English expression phrase injected into the head prompt.
+EXPRESSIONS = [
+    ("開心", "happy, bright smile, open mouth"),
+    ("生氣", "angry, furrowed brow, pouting"),
+    ("愛睏", "sleepy, half-closed drowsy eyes"),
+    ("害羞", "shy, blushing, looking away"),
+    ("偷笑", "smug smirk, sly grin"),
+    ("無言", "blank expressionless deadpan stare"),
+]
+
+
+def generate_expressions(
+    pipeline, image, *, base_prompt, negative, ip_image, control_image, control_scale,
+    strength, steps, guidance, generator, tokenizer,
+):
+    """Re-render the head with each expression prompt (IP-Adapter holds identity, ControlNet kept
+    low so the expression can actually change). Returns [(label, head_image), ...]."""
+    width, height = image.size
+    # Tight face crop (not the wider face-detail box): the expression must read clearly.
+    box = (round(width * 0.30), 0, round(width * 0.70), round(height * 0.30))
+    crop = image.crop(box)
+    scale = 1024 / max(crop.size)
+    target = (max(8, round(crop.size[0] * scale / 8) * 8), max(8, round(crop.size[1] * scale / 8) * 8))
+    head = crop.resize(target, Image.Resampling.LANCZOS)
+    head_control = (
+        control_image.resize(image.size, Image.Resampling.LANCZOS).crop(box).resize(target, Image.Resampling.LANCZOS)
+        if control_image is not None
+        else None
+    )
+
+    panels = []
+    for label, phrase in EXPRESSIONS:
+        prompt = fit_prompt_to_clip(f"portrait, detailed face, {phrase}, {base_prompt}", tokenizer)
+        kwargs = {
+            "prompt": prompt,
+            "negative_prompt": negative,
+            "image": head,
+            "strength": strength,
+            "guidance_scale": guidance,
+            "num_inference_steps": steps,
+            "generator": generator,
+        }
+        if ip_image is not None:
+            kwargs["ip_adapter_image"] = ip_image
+        if head_control is not None:
+            kwargs["control_image"] = head_control
+            kwargs["controlnet_conditioning_scale"] = control_scale
+        panels.append((label, pipeline(**kwargs).images[0].resize(crop.size, Image.Resampling.LANCZOS)))
+    return panels
 
 
 def main() -> None:
@@ -727,6 +791,28 @@ def main() -> None:
             generator=generator,
         )
     output_image.save(output_dir / "result.png")
+
+    if args.expressions:
+        expression_dir = output_dir / "expressions"
+        expression_dir.mkdir(parents=True, exist_ok=True)
+        panels = generate_expressions(
+            pipeline,
+            output_image,
+            base_prompt=prompt_used,
+            negative=negative_used,
+            ip_image=ip_adapter_image,
+            control_image=control_image,
+            control_scale=args.expression_control_scale,
+            strength=args.expression_strength,
+            steps=args.steps,
+            guidance=args.guidance_scale,
+            generator=generator,
+            tokenizer=pipeline.tokenizer,
+        )
+        for label, panel in panels:
+            panel.save(expression_dir / f"{label}.png")
+        print(f"expressions: {', '.join(label for label, _ in panels)} -> {expression_dir}")
+
     generation_seconds = perf_counter() - generation_started
 
     metadata = {
