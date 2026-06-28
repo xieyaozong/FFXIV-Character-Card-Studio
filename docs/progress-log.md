@@ -17,10 +17,12 @@ Implemented:
 
 - screenshot triage and crop
 - background removal
-- local vision-model feature extraction
-- FFXIV race and gear matching hooks
-- prompt/spec compilation
-- optional local generation experiment path
+- local vision-model feature extraction (+ head-zoom traits pass)
+- FFXIV race and gear matching hooks (VLM traits + image-embedding ensemble; force-race override)
+- prompt/spec compilation with race guardrails
+- local generation path: ControlNet structure, IP-Adapter identity, hi-res + anime ESRGAN upscale, face detail
+- expression-sheet generation
+- multi-panel card layout renderer (Path B)
 
 Still local/private:
 

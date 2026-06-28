@@ -121,6 +121,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--race-index", type=Path, default=Path("knowledge/ffxiv/race_index.npz"))
     parser.add_argument(
+        "--race",
+        default=None,
+        help="Force a known race_id (e.g. au_ra): loads its LoRA + tokens + guardrails, skips recognition.",
+    )
+    parser.add_argument(
         "--auto-assets",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -166,7 +171,7 @@ def parse_args() -> argparse.Namespace:
         default=True,
         help="Upscale and lightly re-render the whole image for resolution and polish.",
     )
-    parser.add_argument("--hires-scale", type=float, default=1.5)
+    parser.add_argument("--hires-scale", type=float, default=2.0)
     parser.add_argument("--hires-strength", type=float, default=0.35)
     parser.add_argument(
         "--upscaler-model",
@@ -540,10 +545,16 @@ def main() -> None:
         signatures = load_race_signatures(args.race_signatures)
         traits_obj = RaceTraits.model_validate(features.get("traits", {}))
 
-        # Ensemble: combine the VLM traits with image-embedding kNN over the reference index.
+        # Race resolution. --race forces a known race (loads its LoRA + tokens + guardrails even when
+        # recognition is uncertain), so a known character's special features are never left to a
+        # silently-dropped LoRA. Otherwise fall back to the VLM+embedding ensemble.
         ensemble_race: str | None = None
         ensemble_used = False
-        if args.ensemble_race and args.race_index.is_file():
+        if args.race:
+            ensemble_race = args.race
+            ensemble_used = True
+            print(f"forced race: {ensemble_race}")
+        elif args.ensemble_race and args.race_index.is_file():
             from src.knowledge.race_index import ClipEmbedder, RaceIndex, head_region, on_white
             from src.knowledge.race_matcher import recognize_race_ensemble
 
