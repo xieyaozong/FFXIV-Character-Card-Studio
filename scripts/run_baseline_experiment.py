@@ -198,6 +198,25 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--controlnet-scale", type=float, default=0.6)
     parser.add_argument(
+        "--slot-aware",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Slot-aware generation: a FREE base (pose/body/face) at --base-control-scale, then a HIGH-"
+        "control reproduce pass on the race head. Decouples 'free pose' from 'locked race head'.",
+    )
+    parser.add_argument(
+        "--base-control-scale",
+        type=float,
+        default=0.5,
+        help="ControlNet scale for the free base pass when --slot-aware (lower = freer pose/body).",
+    )
+    parser.add_argument(
+        "--slot-control-scale",
+        type=float,
+        default=0.85,
+        help="HIGH ControlNet scale for slot reproduce passes (race head) when --slot-aware.",
+    )
+    parser.add_argument(
         "--control-preprocessor",
         choices=("none", "canny", "depth"),
         default="canny",
@@ -762,7 +781,7 @@ def main() -> None:
 
         from src.domain.models import RaceTraits
         from src.knowledge.races import load_race_signatures
-        from src.prompting.spec import compile_generation_spec
+        from src.prompting.plan import compile_generation_plan
 
         anatomy_rules_data = yaml.safe_load(args.anatomy_rules.read_text(encoding="utf-8")) or {}
         signatures = load_race_signatures(args.race_signatures)
@@ -793,7 +812,7 @@ def main() -> None:
             gc.collect()
             print(f"ensemble race: {ensemble_race} conf={ensemble.confidence} ({'; '.join(ensemble.reasons)})")
 
-        spec = compile_generation_spec(
+        plan = compile_generation_plan(
             content_terms=terms,
             style_prompt=args.style_prompt,
             base_negative=negative_prompt,
@@ -803,17 +822,23 @@ def main() -> None:
             extra_prompt=args.extra_prompt,
             race_id=ensemble_race,
             recognized=ensemble_used,
+            base_control_scale=args.base_control_scale,
+            slot_control_scale=args.slot_control_scale,
         )
-        prompt = spec.positive_prompt
-        negative_prompt = spec.negative_prompt
-        race_id = spec.race_id
+        prompt = plan.positive_prompt
+        negative_prompt = plan.negative_prompt
+        race_id = plan.race_id
         (output_dir / "constraints.json").write_text(
             json.dumps(
-                {"race_id": race_id, "gear_id": gear_id, "gear_reference": gear_reference, **spec.constraints},
+                {"race_id": race_id, "gear_id": gear_id, "gear_reference": gear_reference, **plan.constraints},
                 ensure_ascii=False,
                 indent=2,
             ),
             encoding="utf-8",
+        )
+        # Save the compiled slot plan for transparency (the diffusion-facing decision record).
+        (output_dir / "plan.json").write_text(
+            json.dumps(plan.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
         )
         print(f"recognized race: {race_id}")
 
@@ -1003,9 +1028,15 @@ def main() -> None:
     }
     if ip_adapter_image is not None:
         generation_kwargs["ip_adapter_image"] = ip_adapter_image
+    # Slot-aware control: a FREE base/hires (low control -> pose/body/face free) and a HIGH-control
+    # race-head reproduce pass (locks horns/scales/head shape). Off => one global scale as before.
+    base_control = args.base_control_scale if args.slot_aware else args.controlnet_scale
+    head_control = args.slot_control_scale if args.slot_aware else args.controlnet_scale
+    if args.slot_aware:
+        print(f"slot-aware: base control={base_control}, race-head control={head_control}")
     if control_image is not None:
         generation_kwargs["control_image"] = control_image
-        generation_kwargs["controlnet_conditioning_scale"] = args.controlnet_scale
+        generation_kwargs["controlnet_conditioning_scale"] = base_control
     output_image = pipeline(**generation_kwargs).images[0]
     output_image.save(output_dir / "result_base.png")
     upscaler = load_upscaler(args.upscaler_model.resolve()) if args.upscaler_model else None
@@ -1017,7 +1048,7 @@ def main() -> None:
             negative=negative_used,
             ip_image=ip_adapter_image,
             control_image=control_image,
-            control_scale=args.controlnet_scale,
+            control_scale=base_control,
             scale=args.hires_scale,
             strength=args.hires_strength,
             steps=args.steps,
@@ -1034,7 +1065,7 @@ def main() -> None:
             negative=negative_used,
             ip_image=ip_adapter_image,
             control_image=control_image,
-            control_scale=args.controlnet_scale,
+            control_scale=head_control,
             strength=args.face_detail_strength,
             steps=args.steps,
             guidance=args.guidance_scale,
@@ -1056,7 +1087,7 @@ def main() -> None:
             negative=negative_used,
             ip_image=ip_adapter_image,
             control_image=control_image,
-            control_scale=args.controlnet_scale,
+            control_scale=base_control,
             strength=args.hand_feet_strength,
             steps=args.steps,
             guidance=args.guidance_scale,
